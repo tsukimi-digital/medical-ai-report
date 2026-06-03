@@ -180,7 +180,7 @@ type RadiologicalReport = {
   examinationType: string           // np. "USG jamy brzusznej"
   clinicalIndication?: string       // wskazanie ze skierowania — kontekst kliniczny dla AI
   examinationContext?: ExaminationContext  // pola kontekstowe warunkowe per typ badania
-  images: Array<{                   // max 5 zdjęć, max 5MB każde (preprocessowane do 1568px)
+  images: Array<{                   // max 5 zdjęć, max 10MB każde po stronie klienta (preprocessowane przez sharp do 1568px — wynik <2MB)
     base64: string
     mimeType: string
     filename: string
@@ -431,7 +431,7 @@ getUserMedia({ audio: {
 ```
 
 **Output:** `{ transcription: string, transcriptionWarning?: string }`
-Gdy transkrypcja < 50 znaków → `transcriptionWarning: "Nagranie może być zbyt krótkie"` — UI ostrzega przed generowaniem raportu.
+Gdy transkrypcja < 200 znaków → `transcriptionWarning: "Nagranie może być zbyt krótkie"` — UI ostrzega przed generowaniem raportu. Próg 200 znaków odpowiada minimalnemu opisowi prostego badania (np. "wątroba bez zmian ogniskowych, nerki wydolne, bez wolnego płynu" to ~80 znaków — Whisper zazwyczaj zwraca więcej). Próg 50 znaków generował fałszywe alarmy dla standardowych krótkich opisów i uczył użytkownika ignorować banery.
 
 **Obsługa błędów — transcribe:**
 - Brak uprawnień mikrofonu: `getUserMedia()` rzuca `NotAllowedError` → UI: "Brak dostępu do mikrofonu. Sprawdź uprawnienia przeglądarki." przed próbą nagrania
@@ -572,11 +572,11 @@ Baner `transcriptionQuality` musi być widoczny w edytorze raportu lekarskiego P
      - USG jamy brzusznej / wątroby / pęcherzyka / trzustki: checkbox **Pacjent na czczo (>6h)**
      - Opcjonalnie dla wszystkich: pole **Wartości lab ze skierowania** (wolny tekst, np. "TSH 6.2 mIU/L")
    - Wskazanie kliniczne: pole tekstowe (opcjonalne, przepisane ze skierowania)
-   - Upload zdjęć: drag & drop, max 5 plików, max 5 MB każdy, walidacja client-side, podgląd miniatur
+   - Upload zdjęć: drag & drop, max 5 plików, max **10 MB** każdy (walidacja client-side), podgląd miniatur. Limit 10MB po stronie klienta — sharp na serwerze reskaluje do 1568px (wynik zwykle <2MB). Limit 5MB odrzucałby realne pliki z aparatów USG przed preprocessingiem.
    - Komentarze: textarea (opcjonalne)
 4. **Generowanie draftu** (do wyboru):
    - Przycisk **"Generuj ze zdjęcia"** → spinner → findings z confidence w edytorze
-   - Przycisk **"Nagraj głos"** → REC (czerwona pulsująca ikona) → STOP → spinner Whisper → spinner Claude → draft w edytorze
+   - Przycisk **"Nagraj głos"** → REC (czerwona pulsująca ikona) → STOP → **Whisper zwraca surową transkrypcję natychmiast** (wyświetlana w readonly preview poniżej przycisku) → **Claude przetwarza w tle** → gdy gotowy, draft zastępuje preview w edytorze. Radiolog może od razu sprawdzić czy Whisper dobrze zrozumiał terminy medyczne, podczas gdy Claude strukturyzuje findings — eliminuje odczucie "czekam na nic".
 5. **Edytor raportu:** Cztery oddzielne edytowalne sekcje (nie jeden textarea):
    - **Znaleziska** — lista strukturalna. Każde finding jako osobna pozycja z edytowalnym tekstem + badge confidence. Po edycji tekstu finding przez radiologa badge confidence zastępowany ikoną "zmodyfikowane ✎" (badge AI znika — nie można twierdzić że AI jest "pewne" czegoś co radiolog przepisał).
    - **Wnioski** (`impression`) — textarea
@@ -599,7 +599,7 @@ Baner `transcriptionQuality` musi być widoczny w edytorze raportu lekarskiego P
    - Wybierz pacjenta: `patient-selector` (combobox)
    - Wybierz raport radiologiczny: `report-selector` (dropdown z listą zatwierdzonych raportów pacjenta — data, typ badania, radiolog)
 4. **Podgląd raportu radiologicznego** — sticky sidebar widoczny podczas całego flow wizyty (nie znika po przewinięciu). Pokazuje: `impression` i `radiologistRecommendations` na górze (najważniejsze dla lekarza), pełna lista findings poniżej z badge confidence. Lekarz może zwinąć/rozwinąć sidebar. Jeśli nie wybrano raportu radiologicznego (`radiologicalReportId` opcjonalne) — sekcja ukryta, lekarz dyktuje bez kontekstu USG.
-5. **"Nagraj wizytę"** → REC → rozmowa z pacjentem → STOP → Whisper → Claude → draft w trzech sekcjach
+5. **"Nagraj wizytę"** → REC → rozmowa z pacjentem → STOP → **Whisper zwraca surową transkrypcję natychmiast** (wyświetlana w readonly preview) → **Claude przetwarza w tle** → draft zastępuje preview. Lekarz może od razu sprawdzić transkrypcję (np. czy Whisper poprawnie rozumiał nazwy leków) podczas gdy Claude buduje sekcje raportu.
 6. **Edytor raportu lekarskiego:** trzy sekcje edytowalne osobno:
    - **Wywiad** (`anamnesis`) — wywiad podmiotowy i przedmiotowy (podpowiedź w sekcji: "Wywiad podmiotowy i wyniki badania fizykalnego")
    - **Rozpoznanie** (`diagnosis`) — z prefiksem gdy niepewne (np. "Prawdopodobnie:", "Różnicowo:")
