@@ -15,6 +15,7 @@ Demo aplikacji usprawniającej pracę radiologa i lekarza przez automatyzację t
 
 - **Framework:** Next.js 14, App Router, TypeScript
 - **Styl:** Tailwind CSS
+- **Pre-processing obrazów:** sharp (resize + EXIF strip)
 - **AI — analiza obrazu / raporty:** Claude Sonnet 4.6 (Anthropic)
 - **AI — transkrypcja głosu:** OpenAI Whisper
 - **Dane:** In-memory singleton (moduł-level), pre-seedowany danymi demo
@@ -88,8 +89,10 @@ AUTH_SECRET=...         # Podpisywanie cookie sesji
     /store.ts                        # In-memory data store (singleton)
     /auth.ts                         # Sesje, walidacja użytkowników
     /ai
-      /claude.ts                     # Claude API client
-      /whisper.ts                    # OpenAI Whisper client
+      /claude.ts                     # Claude API client (z prompt caching, extended thinking)
+      /whisper.ts                    # OpenAI Whisper client (language: pl, priming prompt)
+      /examTypePrompts.ts            # Biblioteka promptów per typ badania — jedyne źródło wiedzy medycznej
+      /image-preprocessor.ts        # Resize obrazów do 1568px, strip EXIF (sharp)
     /types.ts                        # Wspólne typy TypeScript
     /i18n
       /pl.ts                         # Tłumaczenia PL
@@ -98,8 +101,9 @@ AUTH_SECRET=...         # Podpisywanie cookie sesji
     /examination-types.ts            # Lista typów badań USG
   /components
     /ui/                             # Button, Input, Badge, Card, Modal
-    /voice-recorder.tsx              # MediaRecorder API → audioBlob
+    /voice-recorder.tsx              # MediaRecorder API → audioBlob (opus codec, 16kHz mono)
     /image-uploader.tsx              # Drag & drop, max 5 plików, max 5MB każdy
+    /examination-context-fields.tsx  # Pola kontekstowe zależne od typu badania (faza cyklu, czczo)
     /report-editor.tsx               # Edytor raportu (textarea z AI badge)
     /findings-list.tsx               # Lista znalezisk z confidence badge
     /patient-selector.tsx            # Combobox wyszukiwania pacjenta
@@ -152,23 +156,42 @@ type Finding = {
 
 type ImageQuality = 'diagnostic' | 'suboptimal' | 'non_diagnostic'
 
+// Kontekst badania — pola zbierane od radiologa w formularzu.
+// Wyświetlane WARUNKOWO zależnie od typu badania — radiolog nie widzi nieistotnych pól.
+// To są informacje które radiolog i tak wpisuje do raportu manualnie — tu je strukturyzujemy.
+type ExaminationContext = {
+  // Dla USG ginekologicznych (TV/TA) — wpływa na normy endometrium i torbieli
+  menstrualCyclePhase?: 'follicular' | 'ovulatory' | 'luteal' | 'postmenopause' | 'pregnancy' | 'on_contraceptives'
+
+  // Dla USG jamy brzusznej / wątroby / pęcherzyka / trzustki — wpływa na jakość obrazu
+  fastingStatus?: 'fasting' | 'non_fasting'
+
+  // Opcjonalne wartości laboratoryjne ze skierowania (TSH, kreatynina itp.)
+  relevantLabValues?: Array<{ label: string; value: string; unit: string }>
+
+  // Poprzednie zabiegi mogące wpływać na interpretację (np. cholecystektomia → CBD do 8mm norma)
+  priorSurgery?: string
+}
+
 type RadiologicalReport = {
   id: UUID
   patientId: UUID
   radiologistId: UUID
-  examinationType: string        // np. "USG jamy brzusznej"
-  clinicalIndication?: string    // wskazanie / skierowanie — kontekst kliniczny dla AI
-  images: Array<{               // max 5 zdjęć, max 5MB każde
+  examinationType: string           // np. "USG jamy brzusznej"
+  clinicalIndication?: string       // wskazanie ze skierowania — kontekst kliniczny dla AI
+  examinationContext?: ExaminationContext  // pola kontekstowe warunkowe per typ badania
+  images: Array<{                   // max 5 zdjęć, max 5MB każde (preprocessowane do 1568px)
     base64: string
     mimeType: string
     filename: string
   }>
-  imageQuality?: ImageQuality    // ocena jakości obrazu przez AI
-  comments: string               // komentarze radiologa przed generowaniem
-  findings: Finding[]            // znaleziska z confidence (jeśli AI)
-  impression?: string            // wnioski kliniczne — najważniejsza część raportu
-  imagingLimitations?: string    // co AI nie mogło ocenić i dlaczego
-  rawText: string                // pełna treść raportu do edycji
+  imageQuality?: ImageQuality       // ocena jakości obrazu przez AI
+  comments: string                  // komentarze radiologa przed generowaniem (opcjonalne)
+  findings: Finding[]               // znaleziska z confidence (jeśli AI)
+  impression?: string               // wnioski kliniczne — najważniejsza część raportu
+  radiologistRecommendations?: string  // zalecenia radiologa (BAC, kontrola, konsultacja)
+  imagingLimitations?: string       // co AI nie mogło ocenić i dlaczego
+  rawText: string                   // pełna treść raportu do edycji
   aiGenerated: boolean
   status: 'draft' | 'approved'
   createdAt: string
@@ -176,18 +199,23 @@ type RadiologicalReport = {
 }
 
 type DiagnosisConfidence = 'definitive' | 'probable' | 'differential' | 'possible'
+// definitive  — lekarz stwierdził bez modyfikatorów wątpliwości
+// probable    — "prawdopodobnie", "wygląda na", "raczej"
+// differential — "może być X albo Y", "różnicowo", "do różnicowania"
+// possible    — "podejrzewam", "nie można wykluczyć", "może być"
 
 type MedicalReport = {
   id: UUID
   patientId: UUID
   doctorId: UUID
   radiologicalReportId?: UUID
-  transcription: string          // surowa transkrypcja Whisper
-  anamnesis: string              // wywiad podmiotowy
-  diagnosis: string              // rozpoznanie (z prefiksem jeśli niepewne)
+  transcription: string             // surowa transkrypcja Whisper
+  transcriptionQuality?: 'good' | 'partial' | 'poor'  // analogia do imageQuality
+  anamnesis: string                 // wywiad podmiotowy (słowa pacjenta)
+  diagnosis: string                 // rozpoznanie (z prefiksem jeśli niepewne)
   diagnosisConfidence: DiagnosisConfidence
-  recommendations: string        // zalecenia
-  uncertainItems: string[]       // elementy oznaczone przez AI jako niejasne
+  recommendations: string           // zalecenia (leki, skierowania, kontrola)
+  uncertainItems: string[]          // elementy oznaczone przez AI jako niejasne
   aiGenerated: boolean
   status: 'draft' | 'approved'
   createdAt: string
@@ -212,12 +240,57 @@ Ograniczenie Vercel: funkcje serverless mogą być restartowane po ~15 min nieak
 
 ## AI — Szczegóły integracji
 
+### Architektura promptów — system trójwarstwowy
+
+Każde wywołanie Claude składa się z trzech warstw kompilowanych przed wysłaniem do API:
+
+```
+Warstwa 1: Base System Prompt (stały)
+  — rola AI, kryteria confidence, zakazy bezwzględne, format JSON
+
+Warstwa 2: Exam Domain Context (dynamiczny, per typ badania)
+  — generowany przez examTypePrompts.ts na podstawie examinationType
+  — zawiera: struktury do oceny, normy referencyjne, klasyfikacje formalne
+    (TIRADS dla tarczycy, BIRADS dla piersi, Bosniak dla nerek itd.),
+    checklist systematyczny, template impression
+
+Warstwa 3: Runtime Context (per wywołanie, user message)
+  — dane pacjenta, wskazanie kliniczne, kontekst badania, obrazy, język
+```
+
+`examTypePrompts.ts` jest jedynym plikiem zawierającym wiedzę medyczną.
+Dodanie nowego typu badania = jeden obiekt konfiguracji, zero zmian w API routes.
+
+**Typy badań z klasyfikacją formalną (priorytet implementacji):**
+
+| Typ badania | Klasyfikacja | Zakres |
+|-------------|-------------|--------|
+| USG tarczycy | ACR TI-RADS (TR1–TR5, system punktowy) | Każdy guzek musi mieć kategorię |
+| USG piersi | ACR BI-RADS (0–6, z progami biopsji) | Każda zmiana ogniskowa |
+| USG nerek (torbiele) | Bosniak 2019 (I, II, IIF, III, IV) | I i II z USG, wyższe → CT/MRI |
+| USG nerek (wodonercze) | SFU grade 0–IV | Ocena rozstrzeni |
+| USG Doppler tętnic szyjnych | NASCET (% zwężenia + PSV/EDV) | Parametry tylko z dyktowania |
+| USG jamy brzusznej | Brak — opis systematyczny | Kolejność: wątroba→CBD→pęcherzyk→trzustka→śledziona→nerki→aorta→wolny płyn |
+| USG ginekologiczne TV | O-RADS / IOTA dla przydatków | Wymaga fazy cyklu |
+
+**Ważne ograniczenie AI dla badań Doppler:** parametry przepływu (PSV, EDV, RI) są danymi numerycznymi z aparatu — AI nie widzi ich na statycznym zdjęciu. Pochodzi wyłącznie z dyktowania głosowego radiologa.
+
+---
+
 ### Analiza obrazu USG (`/api/ai/analyze-image`)
 
-**Input:** base64 zdjęcia (1–5), examinationType, clinicalIndication, comments, patientAge, patientGender, language
+**Input:** base64 zdjęcia (1–5, preprocessowane do 1568px), examinationType, clinicalIndication, examinationContext, comments, patientAge, patientGender, language
 
-**System prompt (Claude):**
+**Pre-processing obrazów (image-preprocessor.ts):**
+Przed base64 encoding każdy obraz przechodzi przez `sharp`:
+- Resize do max 1568px po dłuższym boku (zachowanie proporcji)
+- Konwersja do JPEG quality 85
+- Strip EXIF (usuwa dane pacjenta zapisane przez aparat USG)
+- Efekt: 40–70% mniej tokenów przy tej samej jakości diagnostycznej
+
+**System prompt (Warstwa 1 + Warstwa 2, z prompt caching):**
 ```
+[WARSTWA 1 — stała, cachowana]
 Jesteś ekspertem AI w analizie obrazów ultrasonograficznych.
 
 KRYTERIA CONFIDENCE (stosuj te definicje — nie progi procentowe):
@@ -227,7 +300,7 @@ KRYTERIA CONFIDENCE (stosuj te definicje — nie progi procentowe):
 
 OCENA JAKOŚCI OBRAZU (wykonaj jako PIERWSZĄ czynność):
 - "diagnostic":     obraz wystarczający do wiarygodnej interpretacji
-- "suboptimal":     używalny, ale z ograniczeniami (ruch, słaba penetracja, niepełny kadr)
+- "suboptimal":     używalny, ale z ograniczeniami
 - "non_diagnostic": obrazu nie można wiarygodnie zinterpretować
 
 ZAKAZY BEZWZGLĘDNE:
@@ -235,15 +308,17 @@ ZAKAZY BEZWZGLĘDNE:
 - Nie przypisuj "high" na podstawie typowej anatomii — tylko na podstawie tego co WIDAĆ
 - Nie dodawaj zaleceń klinicznych ani diagnoz — opisuj wyłącznie widoczne struktury
 - Nie podawaj wymiarów jeśli nie widzisz skali na obrazie
+- Niewidoczne struktury z checklisty → imagingLimitations, nigdy findings[]
+- Zalecenia kliniczne (BAC, kontrola, konsultacja) → impression, nigdy findings[]
 
-Gdy imageQuality = "non_diagnostic": zwróć pustą tablicę findings[] i opisz powód w imagingLimitations.
+Gdy imageQuality = "non_diagnostic": zwróć pustą tablicę findings[].
 
-Zwróć wyłącznie poprawny JSON (bez markdown, bez tekstu poza JSON):
+Zwróć wyłącznie poprawny JSON:
 {
   "imageQuality": "diagnostic" | "suboptimal" | "non_diagnostic",
   "qualityIssues": string[],
   "findings": [{
-    "text": string,
+    "text": string,           // max 120 znaków, jedno zdanie
     "isDeviation": boolean,
     "confidence": "high" | "medium" | "low",
     "anatomicalLocation": string
@@ -251,34 +326,91 @@ Zwróć wyłącznie poprawny JSON (bez markdown, bez tekstu poza JSON):
   "impression": string,
   "imagingLimitations": string | null
 }
+
+[WARSTWA 2 — generowana przez examTypePrompts.buildAnalyzeImageSystemPrompt(examinationType, patientGender)]
+## KONTEKST DOMENOWY: {examinationType}
+Cel badania: {examFocus}
+Struktury obowiązkowe: {anatomicalScope.mandatory}
+Checklist systematyczny: {systematicChecklist}
+Normy referencyjne: {referenceNorms}
+Klasyfikacje formalne: {formalClassifications} ← TIRADS / BIRADS / Bosniak itd.
+Typowe ograniczenia: {imagingLimitations}
+Struktura impression: {impressionTemplate}
 ```
 
-**User message (Claude):**
+**User message (Warstwa 3):**
 ```
+### DANE KLINICZNE
 Typ badania: {examinationType}
-Wskazanie kliniczne: {clinicalIndication || "Brak"}
-Komentarze radiologa: {comments || "Brak"}
-Pacjent: {patientAge} lat, płeć: {patientGender}
-Liczba obrazów: {imageCount}
-{imageCount > 1 ? "Przeanalizuj wszystkie obrazy łącznie i zwróć jedną skonsolidowaną listę findings. Sprzeczności między obrazami → jedno finding z confidence 'low' opisujące sprzeczność." : ""}
-Język raportu: {pl|en}
+Pacjent: {patientGender === 'F' ? 'kobieta' : 'mężczyzna'}, {patientAge} lat
+{fastingStatus ? `Status na czczo: ${fastingStatus === 'fasting' ? 'tak (>6h)' : 'nie'}` : ''}
+{menstrualCyclePhase ? `Faza cyklu: {menstrualCyclePhase}` : ''}
+{relevantLabValues?.length ? `Wartości lab: {relevantLabValues.map(l => `${l.label}: ${l.value} ${l.unit}`).join(', ')}` : ''}
+{priorSurgery ? `Poprzednie zabiegi: {priorSurgery}` : ''}
+Wskazanie kliniczne: {clinicalIndication}
+
+### KOMENTARZ RADIOLOGA (przed analizą)
+{comments || '[brak komentarzy]'}
+
+### OBRAZY ({imageCount} z {imageCount})
+[obrazy jako content blocks — największy pierwszy]
+
+### ZADANIE
+Przeanalizuj obrazy łącznie.
+{imageCount > 1 ? 'Sprzeczności między obrazami: opisz oba warianty jako oddzielne findings (oba confidence low) z numerami obrazów. W impression wyjaśnij sprzeczność.' : ''}
+Findings oznacz numerem obrazu-źródła gdy więcej niż 1.
+Zwróć JSON. Bez tekstu poza JSON.
+Język raportu: {language}
 ```
+
+**Konfiguracja API call:**
+- `temperature: 0` — deterministyczne wyniki
+- `max_tokens: 1500`
+- `thinking: { type: 'enabled', budget_tokens: 8000 }` — włączone gdy imageCount ≥ 3 lub imageQuality === 'suboptimal'
+- `cache_control: { type: 'ephemeral' }` na Warstwie 1+2 system promptu
 
 **Output:** `imageQuality` + `Finding[]` + `impression` + `imagingLimitations`.
-Gdy `imageQuality === 'non_diagnostic'` — UI pokazuje baner ostrzeżenia, findings nie są wyświetlane.
+Gdy `imageQuality === 'non_diagnostic'` — UI pokazuje czerwony baner, findings ukryte.
 
 ### Transkrypcja głosu (`/api/ai/transcribe`)
 
-**Input:** audio blob (WebM z MediaRecorder)  
-**Output:** surowy tekst transkrypcji (Whisper)  
-Brak dalszego przetwarzania — tekst trafia do generate-report.
+**Konfiguracja Whisper:**
+```typescript
+openai.audio.transcriptions.create({
+  model: 'whisper-1',
+  language: 'pl',              // wymagane — bez tego Whisper może wybrać CZ/SK
+  response_format: 'verbose_json',  // daje segmenty z avg_logprob
+  temperature: 0,
+  prompt: WHISPER_MEDICAL_PROMPT,   // ~224 tokeny polskiej terminologii medycznej
+})
+```
+
+`WHISPER_MEDICAL_PROMPT` — fonetyczne zakotwiczenie dla terminologii USG, nazw leków (Metoprolol, Amlodypina, Pantoprazol), akronimów (USG, CRP, TSH, BMI), łaciny (in situ, per os, status post).
+
+**Pre-processing transkrypcji** (przed wysłaniem do Claude):
+- Usunięcie fillerów (eee, yyy, mmm)
+- Auto-korekty typowych błędów Whisper PL (np. "meta prolol" → metoprolol)
+- Segmenty z `avg_logprob < -0.8` → ostrzeżenie o niskiej pewności
+
+**MediaRecorder (voice-recorder.tsx):**
+```typescript
+getUserMedia({ audio: {
+  sampleRate: { ideal: 16000 }, channelCount: 1,
+  echoCancellation: true, noiseSuppression: true, autoGainControl: true
+}})
+// Codec: audio/webm;codecs=opus (Chrome/Edge) → audio/webm → audio/mp4 (Safari fallback)
+```
+
+**Output:** `{ transcription: string, transcriptionWarning?: string }`
+Gdy transkrypcja < 50 znaków → `transcriptionWarning: "Nagranie może być zbyt krótkie"` — UI ostrzega przed generowaniem raportu.
 
 ### Generowanie raportu z transkrypcji (`/api/ai/generate-report`)
 
-**Input:** transkrypcja, rola (`radiologist` | `doctor`), examinationType (opcjonalne), language
+**Input:** transkrypcja, rola (`radiologist` | `doctor`), examinationType, examinationContext, patientAge, patientGender, language
 
-**System prompt — radiolog:**
+**System prompt — radiolog (Warstwa 1 + Warstwa 2):**
 ```
+[WARSTWA 1 — stała, cachowana]
 Jesteś asystentem transkrypcji radiologicznej.
 
 KRYTERIA CONFIDENCE DLA GŁOSU:
@@ -290,6 +422,14 @@ ZAKAZY BEZWZGLĘDNE:
 - Nie dodawaj żadnego znaleziska niepodanego w transkrypcji
 - Nie uzupełniaj urwanych stwierdzeń
 - Zachowaj kolejność znalezisk z dyktowania
+- Zalecenia kliniczne (BAC, kontrola, konsultacja) → impression, nigdy findings[]
+- Liczby bez jednostek i nazwy narządów → confidence "low", odnotuj w transcriptionIssues
+
+OBSŁUGA ZNIEKSZTAŁCEŃ WHISPER:
+- Terminy fonetycznie bliskie terminologii medycznej → popraw i odnotuj w transcriptionIssues
+- Korekty radiologa w locie ("nerka lewa, nie, prawa") → użyj ostatniej wersji, confidence "medium"
+- Liczby: "pięć milimetrów" → "5 mm", "trzy centymetry" → "3 cm"
+- Klasyfikacje formalne (TIRADS 4, BIRADS 3) → zachowaj dosłownie z dyktowania
 
 Zwróć wyłącznie poprawny JSON:
 {
@@ -302,16 +442,21 @@ Zwróć wyłącznie poprawny JSON:
   "impression": string,
   "transcriptionIssues": string[]
 }
+
+[WARSTWA 2 — kontekst domenowy per typ badania z examTypePrompts.ts]
 ```
 
 **User message — radiolog:**
 ```
+### DANE KLINICZNE
 Typ badania: {examinationType}
-Pacjent: {patientAge} lat, płeć: {patientGender}
-Wskazanie kliniczne: {clinicalIndication || "Brak"}
-Język raportu: {pl|en}
+Pacjent: {patientGender === 'F' ? 'kobieta' : 'mężczyzna'}, {patientAge} lat
+{menstrualCyclePhase ? `Faza cyklu: {menstrualCyclePhase}` : ''}
+{fastingStatus ? `Status na czczo: {fastingStatus}` : ''}
+Wskazanie kliniczne: {clinicalIndication}
+Język raportu: {language}
 
-Transkrypcja dyktowania radiologa:
+### TRANSKRYPCJA DYKTOWANIA RADIOLOGA
 "{transcription}"
 ```
 
@@ -378,6 +523,11 @@ Transkrypcja wizyty:
 3. **Nowe badanie:**
    - Wybierz pacjenta: `patient-selector` (combobox, wyszukiwanie po imieniu/nazwisku/PESEL) + link "Dodaj nowego pacjenta"
    - Typ badania: `examination-type-select` (searchable combobox z predefiniowaną listą + własny wpis)
+   - **Pola kontekstowe** — `examination-context-fields` renderuje je warunkowo po wyborze typu badania:
+     - USG ginekologiczne (TV/TA): dropdown **Faza cyklu** (folikularna / lutealna / menopauza / ciąża / antykoncepcja)
+     - USG jamy brzusznej / wątroby / pęcherzyka / trzustki: checkbox **Pacjent na czczo (>6h)**
+     - Opcjonalnie dla wszystkich: pole **Wartości lab ze skierowania** (wolny tekst, np. "TSH 6.2 mIU/L")
+   - Wskazanie kliniczne: pole tekstowe (opcjonalne, przepisane ze skierowania)
    - Upload zdjęć: drag & drop, max 5 plików, max 5 MB każdy, walidacja client-side, podgląd miniatur
    - Komentarze: textarea (opcjonalne)
 4. **Generowanie draftu** (do wyboru):
@@ -404,7 +554,12 @@ Transkrypcja wizyty:
 
 ## Lista typów badań USG (combobox)
 
-USG jamy brzusznej, tarczycy, nerek, wątroby, pęcherzyka żółciowego, trzustki, śledziony, prostaty, ginekologiczne transwaginalne (TV), ginekologiczne przezbrzuszne (TA), piersi, tkanek miękkich, naczyniowe (Doppler), echokardiografia — oraz możliwość wpisania własnego.
+**Z dedykowanym kontekstem domenowym w `examTypePrompts.ts`:**
+USG jamy brzusznej, USG tarczycy, USG nerek, USG wątroby, USG pęcherzyka żółciowego, USG trzustki, USG śledziony, USG prostaty, USG ginekologiczne transwaginalne (TV), USG ginekologiczne przezbrzuszne (TA), USG piersi, USG tkanek miękkich, USG Doppler tętnic szyjnych, USG Doppler tętnic kończyn dolnych, USG Doppler żylny kończyn dolnych (DVT), USG węzłów chłonnych, USG moszny i jąder, USG układu mięśniowo-szkieletowego (MSK), echokardiografia
+
+**Oraz możliwość wpisania własnego** — fallback prompt generyczny.
+
+Uwaga: "USG naczyniowe (Doppler)" rozbite na konkretne typy — każdy Doppler ma inne normy i inne protokoły.
 
 ---
 
@@ -419,6 +574,14 @@ USG jamy brzusznej, tarczycy, nerek, wątroby, pęcherzyka żółciowego, trzust
 | Data urodzenia | date | tak |
 
 ---
+
+## Znane ograniczenia kliniczne (POC)
+
+- `ExaminationContext` nie zawiera dedykowanego pola `allergies` — alergie trafiają do komentarzy jako wolny tekst
+- `imageQuality` jest oceną globalną badania, nie per-narząd — USG jamy brzusznej może mieć widoczną wątrobę (diagnostic) i niewidoczną trzustkę (non_diagnostic); AI opisuje to w `imagingLimitations`
+- Parametry Dopplera (PSV, EDV, RI) niewidoczne na statycznym zdjęciu — AI nie może ich ocenić, pochodzi wyłącznie z dyktowania głosowego
+- Klasyfikacje Bosniak IIF+ wymagają CT/MRI — AI klasyfikuje z USG tylko kategorie I i II, wyższe opisuje jako "wymaga badania kontrastowego"
+- `transcriptionQuality` jest szacowany heurystycznie (długość, ostrzeżenia Whisper) — nie jest to pomiar obiektywny
 
 ## Middleware i bezpieczeństwo
 
