@@ -76,7 +76,7 @@ AUTH_SECRET=...         # Podpisywanie cookie sesji
     /(auth)
       /login/page.tsx
     /(app)
-      /layout.tsx                    # Navbar z przełącznikiem PL/EN + logout
+      /layout.tsx                    # Navbar z przełącznikiem PL/EN + logout + stały disclaimer AI
       /dashboard/page.tsx            # Role-based dashboard
       /patients/page.tsx             # Lista pacjentów
       /patients/new/page.tsx         # Formularz nowego pacjenta
@@ -267,7 +267,7 @@ Każdy typ badania USG ma swój własny, specjalistyczny kontekst domenowy (Wars
 
 Trójwarstwowa architektura zamiast 19 kompletnych standalone promptów wynika z **prompt caching**. Warstwa 1 (rola, zakazy bezwzględne, schemat JSON) jest identyczna dla wszystkich typów badań — Anthropic cache'uje ją po pierwszym wywołaniu i nie liczy jej tokenów przy kolejnych zapytaniach. Gdyby każdy typ badania miał własny kompletny system prompt, każdy musiałby duplikować te same zakazy i schemat JSON — nie byłoby co cache'ować, a każde wywołanie płaciłoby pełny koszt tokenów za powtarzający się tekst bazowy.
 
-W praktyce: Warstwa 1 (~600 tokenów) jest cache'owana po pierwszym USG danego dnia. Każde kolejne badanie (niezależnie od typu) płaci tylko za Warstwę 2 + Warstwę 3.
+W praktyce: Warstwa 1 (~600 tokenów) jest cache'owana przez 5 minut od ostatniego użycia (`ephemeral` TTL Anthropic). Każde kolejne badanie w tym oknie (niezależnie od typu) płaci tylko za Warstwę 2 + Warstwę 3. Po upływie 5 minut nieaktywności — cache miss, Warstwa 1 liczona ponownie.
 
 **Typy badań z klasyfikacją formalną (priorytet implementacji):**
 
@@ -287,7 +287,11 @@ W praktyce: Warstwa 1 (~600 tokenów) jest cache'owana po pierwszym USG danego d
 
 ### Analiza obrazu USG (`/api/ai/analyze-image`)
 
-**Input:** base64 zdjęcia (1–5, preprocessowane do 1568px), examinationType, clinicalIndication, examinationContext, comments, patientAge, patientGender, language
+**Input:** `multipart/form-data` — pola: `images` (1–5 plików binarnych, max 5MB każdy), `examinationType`, `clinicalIndication`, `examinationContext` (JSON string), `comments`, `patientAge`, `patientGender`, `language`
+
+Klient: `FormData.append('images', blob, filename)`. Serwer: `request.formData()` → preprocessing sharp po stronie serwera → base64 do store.
+
+Powód `multipart` zamiast JSON: base64 w JSON body zwiększa rozmiar o ~33% — 5 obrazów × 5MB = ~33MB zakodowanego JSON przekracza limit Vercel 4.5MB. `multipart/form-data` wysyła dane binarne bez narzutu base64.
 
 **Pre-processing obrazów (image-preprocessor.ts):**
 Przed base64 encoding każdy obraz przechodzi przez `sharp`:
@@ -372,13 +376,30 @@ Język raportu: {language}
 ```
 
 **Konfiguracja API call:**
-- `temperature: 0` — deterministyczne wyniki
-- `max_tokens: 1500`
-- `thinking: { type: 'enabled', budget_tokens: 8000 }` — włączone gdy imageCount ≥ 3 lub imageQuality === 'suboptimal'
+- `thinking: { type: 'enabled', budget_tokens: 8000 }` — włączone gdy `imageCount ≥ 3` lub `imageQuality === 'suboptimal'`
+- `temperature: 0` — TYLKO gdy thinking wyłączone (Anthropic API odrzuca `temperature` ≠ 1 gdy thinking aktywne)
+- `max_tokens: 10000` gdy thinking aktywne / `1500` gdy wyłączone (`max_tokens` musi być > `budget_tokens`)
 - `cache_control: { type: 'ephemeral' }` na Warstwie 1+2 system promptu
+
+```typescript
+const useThinking = imageCount >= 3 || imageQuality === 'suboptimal'
+const apiParams = {
+  model: 'claude-sonnet-4-6',
+  max_tokens: useThinking ? 10000 : 1500,
+  ...(useThinking
+    ? { thinking: { type: 'enabled', budget_tokens: 8000 } }
+    : { temperature: 0 })
+}
+```
 
 **Output:** `imageQuality` + `Finding[]` + `impression` + `imagingLimitations`.
 Gdy `imageQuality === 'non_diagnostic'` — UI pokazuje czerwony baner, findings ukryte.
+
+**Obsługa błędów — analyze-image:**
+- Timeout: 45s (ustaw `export const maxDuration = 60` w route handler — wymaga Vercel Pro)
+- Błąd API Anthropic (4xx/5xx): UI pokazuje "Analiza niedostępna. Spróbuj ponownie lub kontynuuj ręcznie." z przyciskiem ponowienia
+- Retry: max 1 auto-retry z korektywnym komunikatem `"Your previous response was not valid JSON. Return ONLY the JSON object:"` — przy `temperature: 0` identyczny prompt da ten sam błąd
+- Po 2 nieudanych próbach: odblokuj edytor z pustym raportem, pokaż baner "AI niedostępne — wprowadź raport ręcznie"
 
 ### Transkrypcja głosu (`/api/ai/transcribe`)
 
@@ -411,6 +432,11 @@ getUserMedia({ audio: {
 
 **Output:** `{ transcription: string, transcriptionWarning?: string }`
 Gdy transkrypcja < 50 znaków → `transcriptionWarning: "Nagranie może być zbyt krótkie"` — UI ostrzega przed generowaniem raportu.
+
+**Obsługa błędów — transcribe:**
+- Brak uprawnień mikrofonu: `getUserMedia()` rzuca `NotAllowedError` → UI: "Brak dostępu do mikrofonu. Sprawdź uprawnienia przeglądarki." przed próbą nagrania
+- Whisper 429 / timeout: UI: "Transkrypcja niedostępna. Spróbuj ponownie lub wpisz tekst ręcznie." z polem textarea jako fallback
+- MediaRecorder MIME: `audio/webm;codecs=opus` (Chrome/Edge), fallback `audio/mp4` (Safari) — wykryć przez `MediaRecorder.isTypeSupported()`. Plik wysyłać z rozszerzeniem `.webm` lub `.mp4` — Whisper wymaga rozszerzenia do wykrycia formatu
 
 ### Generowanie raportu z transkrypcji (`/api/ai/generate-report`)
 
@@ -510,17 +536,27 @@ Transkrypcja wizyty:
 
 ### Confidence — UI
 
-| Poziom | Kolor badge | Znaczenie |
-|--------|-------------|-----------|
-| high | Zielony | Struktura wyraźna, granice ostre, brak alternatywnej interpretacji |
-| medium | Żółty | Widoczna ale niejednoznaczna — wymaga weryfikacji radiologa |
-| low | Czerwony | AI niepewne — zasłonięta, poza kadrem lub wahanie w dyktowaniu |
+| Poziom | Kolor badge | Etykieta tekstowa (PL) | Etykieta tekstowa (EN) |
+|--------|-------------|------------------------|------------------------|
+| high | Zielony | "pewne" | "high" |
+| medium | Żółty | "niepewne" | "medium" |
+| low | Czerwony | "wątpliwe" | "low" |
+
+Badge zawiera zawsze kolor TŁA + etykietę tekstową. Kolor nigdy nie jest jedynym rozróżnieniem (WCAG 1.4.1 — Color Use).
 
 | imageQuality | UI |
 |---|---|
 | diagnostic | Brak komunikatu — analiza wyświetlana normalnie |
 | suboptimal | Żółty baner: "Obraz suboptimalny — {qualityIssues}. Wyniki mogą być ograniczone." |
-| non_diagnostic | Czerwony baner: "Obraz niediagnostyczny — analiza niemożliwa." Findings ukryte. |
+| non_diagnostic | Czerwony baner: "Obraz niediagnostyczny — {qualityIssues}. Analiza AI niemożliwa." + przycisk "Kontynuuj bez AI" który odblokowuje pusty edytor. Radiolog może nie zgadzać się z oceną AI i wpisać raport ręcznie. |
+
+| transcriptionQuality | UI (lekarz) |
+|---|---|
+| good | Brak komunikatu |
+| partial | Żółty baner: "Transkrypcja częściowa — sprawdź nagranie przed zatwierdzeniem." |
+| poor | Czerwony baner: "Transkrypcja słabej jakości — weryfikacja wymagana." |
+
+Baner `transcriptionQuality` musi być widoczny w edytorze raportu lekarskiego PRZED przyciskiem "Zatwierdź i zapisz".
 
 ---
 
@@ -541,8 +577,17 @@ Transkrypcja wizyty:
 4. **Generowanie draftu** (do wyboru):
    - Przycisk **"Generuj ze zdjęcia"** → spinner → findings z confidence w edytorze
    - Przycisk **"Nagraj głos"** → REC (czerwona pulsująca ikona) → STOP → spinner Whisper → spinner Claude → draft w edytorze
-5. **Edytor raportu:** pełna swoboda edycji. Znaleziska AI pokazane z badge confidence. Można edytować tekst bezpośrednio.
-6. **Przycisk "Zatwierdź raport"** → `status: approved` → raport widoczny dla lekarzy
+5. **Edytor raportu:** Cztery oddzielne edytowalne sekcje (nie jeden textarea):
+   - **Znaleziska** — lista strukturalna. Każde finding jako osobna pozycja z edytowalnym tekstem + badge confidence. Po edycji tekstu finding przez radiologa badge confidence zastępowany ikoną "zmodyfikowane ✎" (badge AI znika — nie można twierdzić że AI jest "pewne" czegoś co radiolog przepisał).
+   - **Wnioski** (`impression`) — textarea
+   - **Ograniczenia badania** (`imagingLimitations`) — textarea (prefillowane przez AI, edytowalne)
+   - **Zalecenia radiologa** (`radiologistRecommendations`) — textarea
+   
+   Draft z AI oznaczony stałym badge'em "Wygenerowane przez AI — wymaga weryfikacji" (widoczny dopóki status = draft). Po zatwierdzeniu: badge zmienia się na "Zweryfikowane przez [imię] — [data]".
+
+   Walidacja przed zatwierdzeniem: przycisk "Zatwierdź" zablokowany gdy `findings[]` jest puste ORAZ `impression` jest puste — przynajmniej jedno z nich musi być wypełnione.
+
+6. **Przycisk "Zatwierdź raport"** → dialog potwierdzający: "Zatwierdzenie raportu jest nieodwracalne. Raport będzie widoczny dla lekarzy. Czy chcesz kontynuować?" → `status: approved`, `approvedAt: timestamp` → raport read-only z oznaczeniem "ZATWIERDZONE [data]" → widoczny dla lekarzy
 
 ---
 
@@ -553,10 +598,20 @@ Transkrypcja wizyty:
 3. **Nowa wizyta:**
    - Wybierz pacjenta: `patient-selector` (combobox)
    - Wybierz raport radiologiczny: `report-selector` (dropdown z listą zatwierdzonych raportów pacjenta — data, typ badania, radiolog)
-4. **Podgląd raportu radiologicznego** (tylko czytanie, z confidence badge)
+4. **Podgląd raportu radiologicznego** — sticky sidebar widoczny podczas całego flow wizyty (nie znika po przewinięciu). Pokazuje: `impression` i `radiologistRecommendations` na górze (najważniejsze dla lekarza), pełna lista findings poniżej z badge confidence. Lekarz może zwinąć/rozwinąć sidebar. Jeśli nie wybrano raportu radiologicznego (`radiologicalReportId` opcjonalne) — sekcja ukryta, lekarz dyktuje bez kontekstu USG.
 5. **"Nagraj wizytę"** → REC → rozmowa z pacjentem → STOP → Whisper → Claude → draft w trzech sekcjach
-6. **Edytor raportu lekarskiego:** trzy sekcje: Wywiad / Rozpoznanie / Zalecenia — każda edytowalna osobno
-7. **"Zatwierdź i zapisz"** → `status: approved`
+6. **Edytor raportu lekarskiego:** trzy sekcje edytowalne osobno:
+   - **Wywiad** (`anamnesis`) — wywiad podmiotowy i przedmiotowy (podpowiedź w sekcji: "Wywiad podmiotowy i wyniki badania fizykalnego")
+   - **Rozpoznanie** (`diagnosis`) — z prefiksem gdy niepewne (np. "Prawdopodobnie:", "Różnicowo:")
+   - **Zalecenia** (`recommendations`)
+   
+   Draft z AI oznaczony badge'em "Wygenerowane przez AI — wymaga weryfikacji". Elementy `uncertainItems[]` zaznaczone inline jako `[WYMAGA WERYFIKACJI]`.
+   
+   Jeśli `transcriptionQuality === 'partial'` lub `'poor'` → baner (żółty/czerwony) widoczny nad przyciskiem zatwierdzenia.
+
+7. **"Zatwierdź i zapisz"** → dialog potwierdzający → `status: approved`
+
+AI generuje raport w języku aktualnie wybranym w przełączniku PL/EN. Zmiana języka po wygenerowaniu draftu **nie** tłumaczy istniejącej treści — toast: "Wygenerowany raport jest w języku [PL/EN]. Zmiana języka interfejsu nie wpływa na treść raportu."
 
 ---
 
@@ -591,6 +646,16 @@ Uwaga: "USG naczyniowe (Doppler)" rozbite na konkretne typy — każdy Doppler m
 - Klasyfikacje Bosniak IIF+ wymagają CT/MRI — AI klasyfikuje z USG tylko kategorie I i II, wyższe opisuje jako "wymaga badania kontrastowego"
 - `transcriptionQuality` jest szacowany heurystycznie (długość, ostrzeżenia Whisper) — nie jest to pomiar obiektywny
 
+## Disclaimer AI w UI
+
+Stały pasek informacyjny w `(app)/layout.tsx` — widoczny na każdej stronie aplikacji, nieusuwany przez użytkownika:
+
+> "System AI wspomagający — wszystkie raporty wymagają weryfikacji i zatwierdzenia przez uprawnionego specjalistę. Nie stosować jako jedynego narzędzia diagnostycznego."
+
+Każdy draft raportu (przed zatwierdzeniem) oznaczony badge'em: **"Wygenerowane przez AI — wymaga weryfikacji"**. Po zatwierdzeniu przez radiologa/lekarza: badge zmienia się na **"Zweryfikowane przez [imię] — [data]"** i raport staje się read-only.
+
+---
+
 ## Middleware i bezpieczeństwo
 
 - `middleware.ts` chroni wszystkie trasy `/(app)/*` — redirect do `/login` jeśli brak sesji
@@ -598,6 +663,7 @@ Uwaga: "USG naczyniowe (Doppler)" rozbite na konkretne typy — każdy Doppler m
 - Brak wrażliwych danych w lokalnym storage przeglądarki
 - API keys tylko po stronie serwera (nigdy w kliencie)
 - Walidacja rozmiaru i typu pliku po stronie klienta I serwera
+- Timeout sesji nieaktywnej: po 10 min nieaktywności toast ostrzegawczy "Sesja wygaśnie za 5 minut — zapisz raport". Po 15 min nieaktywności: invalidacja sesji po stronie serwera, redirect do `/login`. Standardowe minimum dla systemów zawierających dane medyczne.
 
 ---
 
@@ -613,6 +679,12 @@ Deployment przez integrację GitHub ↔ Vercel — zero dodatkowych narzędzi CL
 ANTHROPIC_API_KEY
 OPENAI_API_KEY
 AUTH_SECRET
+```
+
+**Wymagany Vercel Pro plan** — Claude Vision z extended thinking zajmuje 20–40s, Whisper transkrypcja ~10–15s. Domyślny timeout Vercel Hobby to 10s → 504 Gateway Timeout. Każdy AI route handler musi mieć:
+
+```typescript
+export const maxDuration = 60  // sekund — wymaga Pro planu
 ```
 
 Brak `vercel` CLI, brak dodatkowych bibliotek Vercel w projekcie.
