@@ -261,6 +261,14 @@ Warstwa 3: Runtime Context (per wywołanie, user message)
 `examTypePrompts.ts` jest jedynym plikiem zawierającym wiedzę medyczną.
 Dodanie nowego typu badania = jeden obiekt konfiguracji, zero zmian w API routes.
 
+**Dlaczego trójwarstwowy system, nie 19 osobnych promptów?**
+
+Każdy typ badania USG ma swój własny, specjalistyczny kontekst domenowy (Warstwa 2) — AI analizująca tarczycę dostaje inny checklist, inne normy i inne klasyfikacje (TI-RADS) niż AI analizująca nerki (Bosniak, SFU). Efekt jest identyczny z posiadaniem 19 osobnych promptów.
+
+Trójwarstwowa architektura zamiast 19 kompletnych standalone promptów wynika z **prompt caching**. Warstwa 1 (rola, zakazy bezwzględne, schemat JSON) jest identyczna dla wszystkich typów badań — Anthropic cache'uje ją po pierwszym wywołaniu i nie liczy jej tokenów przy kolejnych zapytaniach. Gdyby każdy typ badania miał własny kompletny system prompt, każdy musiałby duplikować te same zakazy i schemat JSON — nie byłoby co cache'ować, a każde wywołanie płaciłoby pełny koszt tokenów za powtarzający się tekst bazowy.
+
+W praktyce: Warstwa 1 (~600 tokenów) jest cache'owana po pierwszym USG danego dnia. Każde kolejne badanie (niezależnie od typu) płaci tylko za Warstwę 2 + Warstwę 3.
+
 **Typy badań z klasyfikacją formalną (priorytet implementacji):**
 
 | Typ badania | Klasyfikacja | Zakres |
