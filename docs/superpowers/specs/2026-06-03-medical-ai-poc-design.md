@@ -113,10 +113,12 @@ AUTH_SECRET=...         # Podpisywanie cookie sesji
 ## Modele danych
 
 ```typescript
+type UUID = string  // format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx, generowane przez crypto.randomUUID()
+
 type UserRole = 'radiologist' | 'doctor'
 
 type User = {
-  id: string
+  id: UUID
   name: string
   email: string
   role: UserRole
@@ -124,7 +126,7 @@ type User = {
 }
 
 type Patient = {
-  id: string
+  id: UUID
   firstName: string
   lastName: string
   pesel: string
@@ -142,9 +144,9 @@ type Finding = {
 }
 
 type RadiologicalReport = {
-  id: string
-  patientId: string
-  radiologistId: string
+  id: UUID
+  patientId: UUID
+  radiologistId: UUID
   examinationType: string        // np. "USG jamy brzusznej"
   images: Array<{               // max 5 zdjęć, max 5MB każde
     base64: string
@@ -161,10 +163,10 @@ type RadiologicalReport = {
 }
 
 type MedicalReport = {
-  id: string
-  patientId: string
-  doctorId: string
-  radiologicalReportId?: string
+  id: UUID
+  patientId: UUID
+  doctorId: UUID
+  radiologicalReportId?: UUID
   transcription: string          // surowa transkrypcja Whisper
   anamnesis: string              // wywiad
   diagnosis: string              // rozpoznanie
@@ -321,11 +323,16 @@ USG jamy brzusznej, tarczycy, nerek, wątroby, pęcherzyka żółciowego, trzust
 
 ## Deployment
 
-```bash
-vercel env add ANTHROPIC_API_KEY
-vercel env add OPENAI_API_KEY
-vercel env add AUTH_SECRET
-vercel deploy
+Deployment przez integrację GitHub ↔ Vercel — zero dodatkowych narzędzi CLI.
+
+1. Repo podłączone do Vercel przez panel (github.com → Vercel dashboard)
+2. Każdy push na `main` triggeruje automatyczny deploy
+3. Zmienne środowiskowe ustawiane raz w panelu Vercel (Settings → Environment Variables):
+
+```
+ANTHROPIC_API_KEY
+OPENAI_API_KEY
+AUTH_SECRET
 ```
 
-Jedna komenda deploy, zero dodatkowej infrastruktury.
+Brak `vercel` CLI, brak dodatkowych bibliotek Vercel w projekcie.
