@@ -110,8 +110,8 @@ AUTH_SECRET=...         # Podpisywanie cookie sesji
     /report-editor.tsx               # Edytor raportu (textarea z AI badge)
     /findings-list.tsx               # Lista znalezisk z confidence badge + evidence viewer
     /evidence-viewer.tsx             # Podgląd źródeł znalezisk (numery obrazów, fragmenty transkrypcji)
-    /differential-diagnosis.tsx      # Lista rozpoznań różnicowych z confidence i rationale
-    /ai-insights.tsx                 # Sekcja dodatkowych obserwacji AI (poza raportem formalnym)
+    /ai-suggestions.tsx              # Sekcja "AI Suggestions" — differential dx + obserwacje poza raportem formalnym
+    /quality-check-panel.tsx         # Kompaktowy panel AI Quality Check (status + lista checks)
     /fusion-result.tsx               # Widok Multimodal: confirmed / imageOnly / speechOnly / conflicts
     /chat-widget.tsx                 # Chat with Report — pole pytania + odpowiedź AI
     /patient-timeline.tsx            # Oś czasu badań pacjenta z AI-porównaniem
@@ -179,6 +179,59 @@ type AiInsight = {
   description: string           // rozwinięcie, max 200 znaków — nie trafia do raportu formalnego
 }
 
+// Case D — Quality Review
+type QualityCheckStatus = 'ready' | 'needs_attention' | 'blocked'
+// ready           — draft gotowy do weryfikacji, bez istotnych problemów
+// needs_attention — są ostrzeżenia, ale draft można edytować i zatwierdzić
+// blocked         — obraz non_diagnostic LUB transkrypcja zbyt krótka/niezrozumiała → ręczny edytor
+
+type QualityCheckCategory =
+  | 'image_quality'        // jakość obrazu USG
+  | 'transcription_quality'// jakość transkrypcji Whisper
+  | 'completeness'         // czy wszystkie obowiązkowe struktury ocenione
+  | 'consistency'          // czy impression wynika ze findings
+  | 'classification'       // poprawność TI-RADS, BI-RADS, Bosniak itp.
+  | 'source_evidence'      // czy findings mają potwierdzenie w źródle
+  | 'patient_explanation'  // jakość wersji dla pacjenta
+
+type QualityCheckItem = {
+  category: QualityCheckCategory
+  status: 'pass' | 'warning' | 'fail'
+  message: string
+  relatedFindingIds?: UUID[]
+}
+
+type AiQualityCheck = {
+  status: QualityCheckStatus
+  summary: string
+  checks: QualityCheckItem[]
+  autoCorrections: string[]    // opisy auto-korekt zastosowanych przez AI Reviewer
+  unresolvedItems: string[]    // elementy których AI nie mogło automatycznie naprawić
+}
+
+type PatientExplanation = {
+  plainLanguageSummary: string // główne podsumowanie prostym językiem
+  keyFindings: string[]        // lista kluczowych wyników (bez terminologii łacińskiej)
+  nextSteps: string[]          // co pacjent powinien zrobić
+  followUp: string | null      // zalecana kontrola (np. "za 6 miesięcy") lub null
+  sourceReportId: UUID         // id raportu radiologicznego lub lekarskiego
+  generatedAt: string
+}
+
+// AI Suggestions — ujednolicony model sugestii AI poza formalnym raportem
+type AiSuggestion = {
+  type: 'differential_diagnosis' | 'additional_observation' | 'follow_up_question'
+  title: string
+  description: string
+  confidence: Confidence
+  rationale: string
+  evidence?: {
+    imageIndexes?: number[]
+    transcriptFragments?: string[]
+  }
+  canInsertIntoReport: boolean  // czy radiolog może ręcznie przenieść do raportu
+}
+
 type StructuredFindings = Record<string, unknown>
 // Wewnętrzna reprezentacja SIR — nie pokazywana użytkownikowi bezpośrednio.
 // Przykład dla tarczycy: { thyroid: { rightLobe: { visible, normal }, nodule: { size, echogenicity, margin } } }
@@ -232,15 +285,15 @@ type RadiologicalReport = {
   findings: Finding[]               // znaleziska z confidence + evidence (jeśli AI)
   structuredFindings?: StructuredFindings  // wewnętrzna SIR — wynik Etapu 1 pipeline (nie pokazywana w UI)
   fusionResult?: FusionResult       // wynik fuzji — tylko dla analysisMode === 'multimodal'
-  differentialDiagnoses?: DifferentialDiagnosis[]  // rozpoznania różnicowe AI
+  aiSuggestions?: AiSuggestion[]    // sugestie AI poza raportem formalnym (differential dx, dodatkowe obserwacje)
   aiInsights?: AiInsight[]          // dodatkowe obserwacje AI (poza raportem formalnym)
+  aiQualityCheck?: AiQualityCheck   // wynik Case D — AI Quality Review
   impression?: string               // wnioski kliniczne — najważniejsza część raportu
   radiologistRecommendations?: string  // zalecenia radiologa (BAC, kontrola, konsultacja)
   imagingLimitations?: string       // co AI nie mogło ocenić i dlaczego
-  patientExplanation?: string       // wersja raportu dla pacjenta (generowana po zatwierdzeniu)
+  patientExplanation?: PatientExplanation  // wersja dla pacjenta (generowana po zatwierdzeniu)
   rawText: string                   // pełna treść raportu do edycji
   aiGenerated: boolean
-
   status: 'draft' | 'approved'
   createdAt: string
   approvedAt?: string
@@ -264,6 +317,8 @@ type MedicalReport = {
   diagnosisConfidence: DiagnosisConfidence
   recommendations: string           // zalecenia (leki, skierowania, kontrola)
   uncertainItems: string[]          // elementy oznaczone przez AI jako niejasne
+  aiQualityCheck?: AiQualityCheck   // wynik Case D — AI Quality Review
+  patientExplanation?: PatientExplanation  // wersja dla pacjenta — draft generowany razem z raportem, zatwierdzany przez lekarza
   aiGenerated: boolean
   status: 'draft' | 'approved'
   createdAt: string
@@ -277,10 +332,16 @@ type MedicalReport = {
 
 Moduł-level singleton — jeden obiekt z Mapami dla każdego typu danych. Pre-seedowany przy pierwszym imporcie.
 
-**Pre-seed danych demo:**
-- 3 pacjentów z wypełnionymi danymi
-- 2–3 zatwierdzonych raportów radiologicznych (różne typy badań)
-- 1 roboczego draftu raportu lekarskiego
+**Pre-seed danych demo — 4 Golden Demo Cases:**
+
+| Case | Typ | Cel prezentacji | Element "wow" |
+|------|-----|-----------------|---------------|
+| **Case A** | USG tarczycy (image-to-report) | Analiza obrazu, TI-RADS, evidence | AI wykrywa zmianę, przypisuje klasyfikację, pokazuje z których obrazów wynikają findings |
+| **Case B** | USG jamy brzusznej (voice-to-report) | Transkrypcja dyktowania | Z naturalnego dyktowania powstaje strukturalny raport; niejasne fragmenty w AI Quality Check |
+| **Case C** | Wizyta lekarza z pacjentem | Pełna ścieżka od USG do dokumentu dla pacjenta | AI tworzy notatkę lekarską + wersję dla pacjenta jednym nagraniem |
+| **Case D** | AI Quality Review — conflict | Warstwa jakości | AI oznacza konflikt lub low-confidence element; nie przedstawia go jako pewny wniosek |
+
+Wszystkie dane syntetyczne (bez prawdziwych pacjentów). Deterministyczne — te same dane po każdym restarcie.
 
 Ograniczenie Vercel: funkcje serverless mogą być restartowane po ~15 min nieaktywności — dane nowo dodane przez użytkownika mogą zniknąć. Dane seed są zawsze przywracane. Akceptowalne dla demo.
 
@@ -672,6 +733,51 @@ Użytkownik widzi wyłącznie wersję końcową — zero dodatkowych kroków.
 
 **Efekt:** Wyższy jakościowo pierwszy draft, mniej ręcznych poprawek radiologa, większe zaufanie do AI.
 
+Output `analyze-image` i `generate-report` rozszerzony o `aiQualityCheck: AiQualityCheck` — wynik Etapu 3 przekazywany do UI jako Case D panel.
+
+---
+
+### Case D — AI Quality Review Flow
+
+Nie jest osobnym workflow klinicznym. Uruchamiany automatycznie po każdym wygenerowaniu draftu (Case A, B i C). Użytkownik nie wykonuje żadnych dodatkowych kroków.
+
+**Co sprawdza per case:**
+
+*Case A (analiza obrazu):*
+- jakość obrazu: diagnostic / suboptimal / non_diagnostic
+- kompletność obowiązkowych struktur dla danego typu USG
+- zgodność findings z impression
+- poprawność klasyfikacji formalnych (TI-RADS, BI-RADS, Bosniak, O-RADS)
+- czy findings nie zawierają struktur niewidocznych na obrazie
+- czy low-confidence findings nie są przedstawione jako pewne rozpoznania
+
+*Case B (dyktowanie):*
+- jakość transkrypcji
+- niejasne fragmenty (korekty w locie, liczby bez jednostek)
+- braki względem checklisty danego typu badania
+- opcjonalna walidacja z obrazami jeśli dostępne
+
+*Case C (wizyta lekarza):*
+- rozróżnienie wypowiedzi lekarza i pacjenta
+- zgodność notatki z raportem radiologicznym
+- czy zalecenia wynikają z rozmowy lub raportu
+- niejasne elementy wizyty (`uncertainItems`)
+- czy wersja dla pacjenta nie dodaje nowych faktów medycznych
+
+**Reguły confidence routing:**
+- `confidence: 'high'` → trafia do raportu formalnego jako standardowy finding
+- `confidence: 'medium'` → trafia do raportu formalnego z badge'em; jeśli dotyczy istotnego odchylenia → `QualityCheckItem` status `warning`
+- `confidence: 'low'` → trafia do sekcji "Wymaga weryfikacji" (nie do raportu formalnego). Musi być oznaczone językiem niepewności jeśli radiolog zdecyduje się je przenieść
+- `blocked` → gdy `imageQuality === 'non_diagnostic'` LUB transkrypcja zbyt krótka/niezrozumiała → UI odblokowuje ręczny edytor, jasny komunikat o powodzie
+
+**Prompt addition (do wszystkich generate prompts):**
+```
+REGUŁY CONFIDENCE ROUTING:
+- Nie przedstawiaj finding z confidence "low" jako pewnego rozpoznania
+- Finding z confidence "low" trafia do imagingLimitations lub sekcji unresolvedItems quality check
+- Impression może zawierać wyłącznie findings z confidence "high" lub "medium"
+```
+
 ---
 
 ### Multimodal Radiologist Copilot (`/api/ai/fuse-findings`)
@@ -757,24 +863,25 @@ Dla każdej istotnej zmiany ogniskowej lub niepewnego znaleziska wygeneruj maksy
 Każde: { diagnosis: string, confidence: 'high'|'medium'|'low', rationale: string (max 150 znaków) }
 ```
 
-**Output field:** `RadiologicalReport.differentialDiagnoses: DifferentialDiagnosis[]`
+**Output field:** `RadiologicalReport.aiSuggestions[]` (type: `'differential_diagnosis'`)
 
-**UI `differential-diagnosis`:** Sekcja "Rozpoznania różnicowe" poniżej findings — zwijana domyślnie, widoczna po kliknięciu. Każde rozpoznanie z badge confidence i jednozdaniowym uzasadnieniem.
+**Kluczowa reguła:** Differential diagnosis są sugestiami AI — **domyślnie nie są częścią formalnego raportu**. Radiolog może je ręcznie wykorzystać. Każdy element ma `rationale` i `confidence`. Przycisk "Dodaj do raportu" per suggestion.
+
+**UI `ai-suggestions`:** Sekcja "AI Suggestions" poniżej raportu formalnego, wyraźnie oddzielona. Nagłówek: "Te elementy nie zostały automatycznie dodane do raportu."
 
 ---
 
 ### AI Insights
 
-Obserwacje AI wykraczające poza formalne findings — nie trafiają do raportu automatycznie, są dodatkową warstwą informacji dla specjalisty.
+Obserwacje AI wykraczające poza formalne findings — dodawane do `aiSuggestions[]` (type: `'additional_observation'`), nie do raportu automatycznie.
 
 **Prompt addition:**
 ```
-Jeśli widzisz cokolwiek godnego uwagi co NIE kwalifikuje się jako finding (np. cecha atypowa dla kategorii, porównanie z normą populacyjną, sugestia dodatkowego kąta), dodaj do aiInsights[].
+Jeśli widzisz cokolwiek godnego uwagi co NIE kwalifikuje się jako finding, dodaj do aiInsights[].
 Max 3 insights. Każdy: { title: string (max 60 znaków), description: string (max 200 znaków) }
-Insights są widoczne tylko dla radiologa — nie trafiają do raportu.
 ```
 
-**UI `ai-insights`:** Sekcja "Obserwacje AI" z ikoną żarówki — oddzielona wizualnie od raportu formalnego, z nagłówkiem "Nie są częścią raportu".
+**UI `ai-suggestions`:** Obserwacje i differential diagnosis renderowane razem w jednej sekcji "AI Suggestions" — oddzielnej od raportu formalnego.
 
 ---
 
@@ -806,24 +913,26 @@ Nie generuj nowych findings poza raportem.
 
 ### Patient Communication Generator (`/api/ai/generate-patient-explanation`)
 
-Po zatwierdzeniu raportu — jeden przycisk generuje wersję zrozumiałą dla pacjenta.
+**Case A / radiolog:** Generowane po zatwierdzeniu raportu — przycisk "Generuj wyjaśnienie dla pacjenta".
+**Case C / lekarz:** Generowane **jednocześnie** z raportem lekarskim — od razu dostępne jako draft w panelu "Dla pacjenta", edytowalny przed zatwierdzeniem.
 
-**Input:** `reportId` (zatwierdzony raport)
+**Input:** `reportId` + opcjonalnie `transcription` (dla Case C)
 
 **System prompt:**
 ```
-Jesteś asystentem komunikacji medycznej. Przetłumacz raport medyczny na język zrozumiały dla pacjenta bez wykształcenia medycznego.
-Zasady:
+Jesteś asystentem komunikacji medycznej.
+ZASADY:
+- Nie dodawaj żadnych faktów medycznych których nie ma w raporcie źródłowym
 - Unikaj terminologii łacińskiej — zastąp polskim odpowiednikiem
-- Nie bagatelizuj ani nie dramatyzuj wyników
-- Wyraźnie wskaż co jest normą, co wymaga uwagi, jakie są następne kroki
-- Max 200 słów
-- Zakończ zaleceniami (co pacjent powinien zrobić)
+- Nie bagatelizuj ani nie dramatyzuj — zachowaj niepewność jeśli raport ją zawiera
+- Rozdziel: "co znaleziono" / "co to oznacza" / "co dalej"
+Zwróć JSON: { plainLanguageSummary, keyFindings[], nextSteps[], followUp }
 ```
 
-**Output:** `patientExplanation: string` zapisane w RadiologicalReport lub MedicalReport.
+**Output:** `PatientExplanation` (structured) zapisane w RadiologicalReport lub MedicalReport.
 
-**UI:** Przycisk "Generuj wyjaśnienie dla pacjenta" widoczny po zatwierdzeniu raportu. Wynik w osobnej karcie — do wydruku lub przekazania SMS/email (poza zakresem POC).
+**UI (Case A):** Osobna zakładka "Dla pacjenta" po zatwierdzeniu — sekcje keyFindings, nextSteps, followUp. Do wydruku lub przekazania (poza zakresem POC).
+**UI (Case C):** Panel "Dla pacjenta" renderowany obok raportu lekarskiego — draft edytowalny, zatwierdzany razem z raportem.
 
 ---
 
@@ -880,6 +989,10 @@ Baner `transcriptionQuality` musi być widoczny w edytorze raportu lekarskiego P
 
 ## Flow radiologa — szczegółowy
 
+### Case A — Image-to-Report / Case B — Voice-to-Report
+
+Radiolog wybiera tryb generowania na etapie kroku 4. Reszta flow identyczna.
+
 1. **Login** → przekierowanie do Dashboard
 2. **Dashboard** → lista jego badań (data, pacjent, typ, status), przycisk "Nowe badanie"
 3. **Nowe badanie:**
@@ -896,13 +1009,32 @@ Baner `transcriptionQuality` musi być widoczny w edytorze raportu lekarskiego P
    - Przycisk **"Generuj ze zdjęcia"** → Two-Step Pipeline: surowe obserwacje AI (collapsible) → findings z confidence w edytorze
    - Przycisk **"Nagraj głos"** → REC (czerwona pulsująca ikona) → STOP → **Whisper zwraca surową transkrypcję natychmiast** (wyświetlana w readonly preview poniżej przycisku) → **Claude przetwarza w tle** → gdy gotowy, draft zastępuje preview w edytorze. Radiolog może od razu sprawdzić czy Whisper dobrze zrozumiał terminy medyczne, podczas gdy Claude strukturyzuje findings — eliminuje odczucie "czekam na nic".
    - Przycisk **"Analizuj wielomodalnie"** (aktywny tylko gdy są ZARÓWNO obrazy jak i nagranie) → Multimodal pipeline: analiza obrazów + transkrypcja → Fusion Layer → widok FusionResult z sekcjami: Potwierdzone / Tylko na obrazie / Tylko w dyktowaniu / Konflikty
-5. **Edytor raportu:** Cztery oddzielne edytowalne sekcje (nie jeden textarea):
-   - **Znaleziska** — lista strukturalna. Każde finding jako osobna pozycja z edytowalnym tekstem + badge confidence + ikona "źródło" otwierająca `evidence-viewer` (numery obrazów, cytat z transkrypcji). Po edycji tekstu finding przez radiologa badge confidence zastępowany ikoną "zmodyfikowane ✎".
-   - **Rozpoznania różnicowe** — collapsible sekcja `differential-diagnosis` poniżej findings. Każde rozpoznanie z badge confidence i jednozdaniowym rationale.
-   - **Obserwacje AI** — collapsible sekcja `ai-insights` z ikoną żarówki. Oddzielona wizualnie: "Nie są częścią raportu formalnego".
+5. **Edytor raportu** — dwa obszary wizualnie oddzielone:
+
+   **Raport formalny** (4 sekcje edytowalne):
+   - **Znaleziska (high/medium confidence)** — lista strukturalna. Każde finding z badge confidence + ikona "źródło" (`evidence-viewer`). Po edycji badge zastępowany ikoną "zmodyfikowane ✎".
+   - **Wymaga weryfikacji** — oddzielna sekcja na findings z `confidence: 'low'`. Etykieta: "Te elementy wymagają weryfikacji — AI nie było pewne." Nie są przedstawiane jako pewne rozpoznania. Radiolog może je przenieść do raportu formalnego lub usunąć.
    - **Wnioski** (`impression`) — textarea
-   - **Ograniczenia badania** (`imagingLimitations`) — textarea (prefillowane przez AI, edytowalne)
-   - **Zalecenia radiologa** (`radiologistRecommendations`) — textarea
+   - **Ograniczenia badania** (`imagingLimitations`) — textarea
+   - **Zalecenia** (`radiologistRecommendations`) — textarea
+
+   **AI Suggestions** (poza raportem formalnym, `ai-suggestions.tsx`):
+   - Możliwe rozpoznania różnicowe z confidence i rationale
+   - Dodatkowe obserwacje AI (`aiInsights`)
+   - Nagłówek: "Te elementy nie zostały automatycznie dodane do raportu. Możesz je ręcznie wykorzystać podczas edycji."
+   - Przycisk "Dodaj do raportu" per suggestion → wstawia tekst do odpowiedniej sekcji
+
+   **AI Quality Check** (`quality-check-panel.tsx`) — kompaktowy panel nad przyciskiem "Zatwierdź":
+   ```
+   AI Quality Check
+   Status: Gotowe do weryfikacji / Wymaga uwagi / Zablokowane
+
+   ✓ Kompletność struktur
+   ✓ Spójność opisu i wniosków
+   ⚠ Niska pewność: 2 elementy → sekcja "Wymaga weryfikacji"
+   ⚠ Klasyfikacja TI-RADS wymaga potwierdzenia cech punktowanych
+   ```
+   Panel wspiera szybkie skanowanie — radiolog widzi co wymaga uwagi bez szukania w całym raporcie.
    
    Draft z AI oznaczony stałym badge'em "Wygenerowane przez AI — wymaga weryfikacji" (widoczny dopóki status = draft). Po zatwierdzeniu: badge zmienia się na "Zweryfikowane przez [imię] — [data]".
 
@@ -915,6 +1047,10 @@ Baner `transcriptionQuality` musi być widoczny w edytorze raportu lekarskiego P
 
 ## Flow lekarza — szczegółowy
 
+### Case C — Doctor Visit-to-Patient-Report
+
+AI automatycznie: odróżnia wypowiedzi lekarza od pacjenta, wyciąga rozpoznanie i zalecenia, powiązuje rozmowę z raportem radiologicznym, generuje raport lekarski **i** wersję dla pacjenta jednocześnie.
+
 1. **Login** → Dashboard
 2. **Dashboard** → lista jego wizyt (data, pacjent, status), przycisk "Nowa wizyta"
 3. **Nowa wizyta:**
@@ -922,16 +1058,26 @@ Baner `transcriptionQuality` musi być widoczny w edytorze raportu lekarskiego P
    - Wybierz raport radiologiczny: `report-selector` (dropdown z listą zatwierdzonych raportów pacjenta — data, typ badania, radiolog)
 4. **Podgląd raportu radiologicznego** — sticky sidebar widoczny podczas całego flow wizyty (nie znika po przewinięciu). Pokazuje: `impression` i `radiologistRecommendations` na górze (najważniejsze dla lekarza), pełna lista findings poniżej z badge confidence. Lekarz może zwinąć/rozwinąć sidebar. Jeśli nie wybrano raportu radiologicznego (`radiologicalReportId` opcjonalne) — sekcja ukryta, lekarz dyktuje bez kontekstu USG.
 5. **"Nagraj wizytę"** → REC → rozmowa z pacjentem → STOP → **Whisper zwraca surową transkrypcję natychmiast** (wyświetlana w readonly preview) → **Claude przetwarza w tle** → draft zastępuje preview. Lekarz może od razu sprawdzić transkrypcję (np. czy Whisper poprawnie rozumiał nazwy leków) podczas gdy Claude buduje sekcje raportu.
-6. **Edytor raportu lekarskiego:** trzy sekcje edytowalne osobno:
-   - **Wywiad** (`anamnesis`) — wywiad podmiotowy i przedmiotowy (podpowiedź w sekcji: "Wywiad podmiotowy i wyniki badania fizykalnego")
-   - **Rozpoznanie** (`diagnosis`) — z prefiksem gdy niepewne (np. "Prawdopodobnie:", "Różnicowo:")
-   - **Zalecenia** (`recommendations`)
-   
-   Draft z AI oznaczony badge'em "Wygenerowane przez AI — wymaga weryfikacji". Elementy `uncertainItems[]` zaznaczone inline jako `[WYMAGA WERYFIKACJI]`.
-   
-   Jeśli `transcriptionQuality === 'partial'` lub `'poor'` → baner (żółty/czerwony) widoczny nad przyciskiem zatwierdzenia.
+6. **Edytor — dwa panele obok siebie:**
 
-7. **"Zatwierdź i zapisz"** → dialog potwierdzający → `status: approved`
+   **Panel lewy — Raport medyczny (dla lekarza):**
+   - **Wywiad** (`anamnesis`) — podmiotowy i przedmiotowy
+   - **Rozpoznanie** (`diagnosis`) — z prefiksem gdy niepewne
+   - **Zalecenia** (`recommendations`)
+   - Elementy `uncertainItems[]` inline jako `[WYMAGA WERYFIKACJI]`
+   - **AI Quality Check** — kompaktowy panel: spójność z raportem radiologicznym, rozróżnienie lekarza/pacjenta, niejasne elementy wizyty
+
+   **Panel prawy — Dla pacjenta (draft edytowalny):**
+   - `plainLanguageSummary` — co znaleziono (bez terminologii łacińskiej)
+   - `keyFindings[]` — lista kluczowych wyników
+   - `nextSteps[]` — co pacjent powinien zrobić
+   - `followUp` — zalecana kontrola
+   - Badge: "AI wygenerowała tę wersję na podstawie raportu i rozmowy. Nie dodaje nowych faktów medycznych."
+   - Edytowalna przed zatwierdzeniem — lekarz może zmodyfikować język
+
+   Jeśli `transcriptionQuality === 'partial'` lub `'poor'` → baner widoczny nad przyciskiem zatwierdzenia.
+
+7. **"Zatwierdź i zapisz"** → dialog potwierdzający → `status: approved` dla raportu lekarskiego i wersji pacjenckiej jednocześnie
 
 AI generuje raport w języku aktualnie wybranym w przełączniku PL/EN. Zmiana języka po wygenerowaniu draftu **nie** tłumaczy istniejącej treści — toast: "Wygenerowany raport jest w języku [PL/EN]. Zmiana języka interfejsu nie wpływa na treść raportu."
 
@@ -957,6 +1103,37 @@ Uwaga: "USG naczyniowe (Doppler)" rozbite na konkretne typy — każdy Doppler m
 | PESEL | text (11 cyfr) | tak |
 | Płeć | M / K | tak |
 | Data urodzenia | date | tak |
+
+---
+
+## Golden Demo Cases — scenariusze prezentacyjne
+
+Cztery pre-seedowane scenariusze w in-memory store — deterministyczne dane syntetyczne. Presenter wybiera case z dashboardu i pokazuje konkretny element "wow" bez ryzyka niespodzianki.
+
+### Case A — USG tarczycy (image-to-report)
+- **Pacjent:** Syntetyczny, kobieta 52 lata, wskazanie: "guzek tarczycy do oceny"
+- **Obrazy:** 3 syntetyczne zdjęcia USG tarczycy z widoczną zmianą hipoechogeniczną 8mm lewego płata
+- **Oczekiwane AI:** TI-RADS 4, zmiana 8mm, echogeniczność niska, marginesy nieregularne, mikrozwapnienia — confidence high/medium, evidence wskazuje na obraz 2 i 3
+- **Element "wow":** AI przypisuje klasyfikację formalną (TI-RADS 4), pokazuje z których obrazów wynika finding, AI Suggestions zawiera rozpoznanie różnicowe
+
+### Case B — USG jamy brzusznej (voice-to-report)
+- **Pacjent:** Syntetyczny, mężczyzna 61 lat, wskazanie: "bóle brzucha, kontrola"
+- **Transkrypcja:** Pre-nagrana lub pre-wpisana — zawiera korektę w locie ("nerka lewa, nie, prawa"), liczbę z jednostką ("torbiel pięć milimetrów"), pewien element niejasny
+- **Oczekiwane AI:** Ustrukturyzowany raport z obsługą korekty radiologa, liczba przetworzona na "5 mm", niejasny element trafia do AI Quality Check jako warning
+- **Element "wow":** Z chaotycznego dyktowania powstaje profesjonalny raport; Quality Check pokazuje co wymagało uwagi
+
+### Case C — Wizyta lekarza z pacjentem
+- **Pacjent:** Ten sam co Case A lub Case B (ciągłość ścieżki)
+- **Raport radiologiczny:** Zatwierdzony raport z Case A
+- **Transkrypcja wizyty:** Pre-nagrana — lekarz i pacjent rozmawiają naprzemiennie, lekarz omawia wyniki USG
+- **Oczekiwane AI:** Notatka lekarska (anamnesis/diagnosis/recommendations) + wersja dla pacjenta jednocześnie. AI rozróżnia wypowiedzi lekarza od pacjenta. Raport powiązany z wynikami USG.
+- **Element "wow":** Jedno nagranie → dwa dokumenty. Wersja dla pacjenta prostym językiem, bez terminologii łacińskiej.
+
+### Case D — AI Quality Review / Conflict
+- **Pacjent:** Syntetyczny, mężczyzna 45 lat, USG tarczycy
+- **Obrazy:** Niska jakość (suboptimal) + element low-confidence (struktura częściowo zasłonięta)
+- **Oczekiwane AI:** imageQuality: suboptimal → żółty baner. Finding low-confidence trafia do "Wymaga weryfikacji", nie do raportu formalnego. AI Quality Check pokazuje warning. AI Suggestions zawiera obserwację której AI nie mogło potwierdzić.
+- **Element "wow":** AI nie udaje pewności — otwarcie komunikuje co wymaga weryfikacji i dlaczego.
 
 ---
 
