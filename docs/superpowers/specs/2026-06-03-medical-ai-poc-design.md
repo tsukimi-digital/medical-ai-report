@@ -70,9 +70,12 @@ AUTH_SECRET=...         # Podpisywanie cookie sesji
           /route.ts                  # GET lista, POST utwórz
           /[id]/route.ts             # GET, PUT, PATCH (zatwierdź)
       /ai
-        /analyze-image/route.ts      # Claude Vision → findings z confidence
+        /analyze-image/route.ts      # Claude Vision → findings z confidence (tryb image)
         /transcribe/route.ts         # audio → Whisper → tekst
         /generate-report/route.ts    # tekst + rola → Claude → draft raportu
+        /fuse-findings/route.ts      # Multimodal: łączy findings z obrazu i mowy → FusionResult
+        /chat/route.ts               # Chat with Report — Q&A na bazie raportu i obrazów
+        /generate-patient-explanation/route.ts  # Approved report → wersja zrozumiała dla pacjenta
     /(auth)
       /login/page.tsx
     /(app)
@@ -80,7 +83,7 @@ AUTH_SECRET=...         # Podpisywanie cookie sesji
       /dashboard/page.tsx            # Role-based dashboard
       /patients/page.tsx             # Lista pacjentów
       /patients/new/page.tsx         # Formularz nowego pacjenta
-      /patients/[id]/page.tsx        # Profil pacjenta + historia raportów
+      /patients/[id]/page.tsx        # Profil pacjenta + timeline badań + porównanie AI
       /examination/new/page.tsx      # Radiolog: nowe badanie
       /examination/[id]/page.tsx     # Radiolog: podgląd / edycja raportu
       /visit/page.tsx                # Lekarz: nowa wizyta
@@ -102,10 +105,17 @@ AUTH_SECRET=...         # Podpisywanie cookie sesji
   /components
     /ui/                             # Button, Input, Badge, Card, Modal
     /voice-recorder.tsx              # MediaRecorder API → audioBlob (opus codec, 16kHz mono)
-    /image-uploader.tsx              # Drag & drop, max 5 plików, max 5MB każdy
+    /image-uploader.tsx              # Drag & drop, max 5 plików, max 10MB każdy
     /examination-context-fields.tsx  # Pola kontekstowe zależne od typu badania (faza cyklu, czczo)
     /report-editor.tsx               # Edytor raportu (textarea z AI badge)
-    /findings-list.tsx               # Lista znalezisk z confidence badge
+    /findings-list.tsx               # Lista znalezisk z confidence badge + evidence viewer
+    /evidence-viewer.tsx             # Podgląd źródeł znalezisk (numery obrazów, fragmenty transkrypcji)
+    /differential-diagnosis.tsx      # Lista rozpoznań różnicowych z confidence i rationale
+    /ai-insights.tsx                 # Sekcja dodatkowych obserwacji AI (poza raportem formalnym)
+    /fusion-result.tsx               # Widok Multimodal: confirmed / imageOnly / speechOnly / conflicts
+    /chat-widget.tsx                 # Chat with Report — pole pytania + odpowiedź AI
+    /patient-timeline.tsx            # Oś czasu badań pacjenta z AI-porównaniem
+
     /patient-selector.tsx            # Combobox wyszukiwania pacjenta
     /report-selector.tsx             # Dropdown raportów radiologicznych pacjenta
     /examination-type-select.tsx     # Searchable combobox typów badań
@@ -152,6 +162,37 @@ type Finding = {
   isDeviation: boolean
   confidence: Confidence
   anatomicalLocation: string    // np. "wątroba segment VI", "nerka lewa"
+  evidence?: {                  // Evidence Layer — skąd AI wzięło to znalezisko
+    imageIndexes?: number[]     // indeksy obrazów (0-based) na których widoczne
+    transcriptFragments?: string[]  // cytaty z transkrypcji potwierdzające finding
+  }
+}
+
+type DifferentialDiagnosis = {
+  diagnosis: string             // nazwa rozpoznania
+  confidence: Confidence        // high/medium/low — jak mocno obraz pasuje
+  rationale: string             // max 200 znaków — dlaczego to rozpoznanie
+}
+
+type AiInsight = {
+  title: string                 // krótki tytuł obserwacji, max 60 znaków
+  description: string           // rozwinięcie, max 200 znaków — nie trafia do raportu formalnego
+}
+
+type StructuredFindings = Record<string, unknown>
+// Wewnętrzna reprezentacja SIR — nie pokazywana użytkownikowi bezpośrednio.
+// Przykład dla tarczycy: { thyroid: { rightLobe: { visible, normal }, nodule: { size, echogenicity, margin } } }
+// Per typ badania — generowana przez Etap 1 analyze-image pipeline.
+
+type FusionResult = {
+  confirmedFindings: Finding[]  // widoczne na obrazie ORAZ wspomniane w dyktowaniu
+  imageOnlyFindings: Finding[]  // widoczne na obrazie, niepomniane przez radiologa
+  speechOnlyFindings: Finding[] // powiedziane przez radiologa, nieznalezione na obrazach
+  conflicts: Array<{
+    speechClaim: string         // co powiedział radiolog
+    imageEvidence: string       // co widać na obrazie
+    note: string                // wyjaśnienie konfliktu dla radiologa
+  }>
 }
 
 type ImageQuality = 'diagnostic' | 'suboptimal' | 'non_diagnostic'
@@ -187,12 +228,19 @@ type RadiologicalReport = {
   }>
   imageQuality?: ImageQuality       // ocena jakości obrazu przez AI
   comments: string                  // komentarze radiologa przed generowaniem (opcjonalne)
-  findings: Finding[]               // znaleziska z confidence (jeśli AI)
+  analysisMode?: 'image' | 'voice' | 'multimodal'  // tryb generowania
+  findings: Finding[]               // znaleziska z confidence + evidence (jeśli AI)
+  structuredFindings?: StructuredFindings  // wewnętrzna SIR — wynik Etapu 1 pipeline (nie pokazywana w UI)
+  fusionResult?: FusionResult       // wynik fuzji — tylko dla analysisMode === 'multimodal'
+  differentialDiagnoses?: DifferentialDiagnosis[]  // rozpoznania różnicowe AI
+  aiInsights?: AiInsight[]          // dodatkowe obserwacje AI (poza raportem formalnym)
   impression?: string               // wnioski kliniczne — najważniejsza część raportu
   radiologistRecommendations?: string  // zalecenia radiologa (BAC, kontrola, konsultacja)
   imagingLimitations?: string       // co AI nie mogło ocenić i dlaczego
+  patientExplanation?: string       // wersja raportu dla pacjenta (generowana po zatwierdzeniu)
   rawText: string                   // pełna treść raportu do edycji
   aiGenerated: boolean
+
   status: 'draft' | 'approved'
   createdAt: string
   approvedAt?: string
@@ -534,6 +582,276 @@ Transkrypcja wizyty:
 "{transcription}"
 ```
 
+### Wewnętrzna architektura AI pipeline (analyze-image)
+
+Użytkownik wykonuje dokładnie te same czynności — wrzuca obrazy, klika "Generuj". Wewnątrz `/api/ai/analyze-image` pracuje trójstopniowy pipeline poprawiający jakość draftu bez dodatkowego inputu od radiologa.
+
+```
+Images
+↓
+[Etap 1] Structured Intermediate Representation (SIR)
+↓
+[Etap 2] Multi-Step Clinical Reasoning
+↓
+[Etap 3] AI Reviewer (Self-Critique)
+↓
+Final Draft → User
+```
+
+---
+
+#### Etap 1 — Structured Intermediate Representation (SIR)
+
+AI nie tworzy raportu od razu. Najpierw generuje ustrukturyzowany opis badania per organ — oddzielając **obserwacje** od **interpretacji**.
+
+**Prompt Etapu 1:**
+```
+Opisz wyłącznie to co WIDZISZ na obrazach. Nie interpretuj, nie klasyfikuj, nie generuj raportu.
+Zwróć JSON z opisem każdej widocznej struktury: rozmiar, echogeniczność, marginesy, obecność zmian.
+```
+
+**Przykład SIR dla USG tarczycy:**
+```json
+{
+  "thyroid": {
+    "rightLobe": { "visible": true, "dimensions": "normal", "echotexture": "homogeneous" },
+    "leftLobe": { "visible": true, "dimensions": "normal", "echotexture": "heterogeneous" },
+    "nodule": { "size": "8mm", "echogenicity": "hypoechoic", "margin": "irregular", "microcalcifications": true }
+  },
+  "lymphNodes": { "visible": false }
+}
+```
+
+**Efekt:** Mniej pominiętych struktur, lepsza spójność findings ↔ impression, mniejsza liczba hallucynacji (model "widzi" zanim "interpretuje"). SIR nie jest pokazywane użytkownikowi — istnieje tylko wewnętrznie jako wejście do Etapu 2.
+
+---
+
+#### Etap 2 — Multi-Step Clinical Reasoning Pipeline
+
+SIR przechodzi przez sekwencję wyspecjalizowanych promptów zamiast jednego "zrób wszystko" prompt:
+
+```
+SIR
+↓ Prompt A: Anatomy Detection → identifiedStructures[]
+↓ Prompt B: Observation Extraction → observations[] (bez interpretacji)
+↓ Prompt C: Abnormality Detection → normalFindings[], abnormalFindings[]
+↓ Prompt D: Classification → classifications[] (TI-RADS, BI-RADS etc. per znalezisko)
+↓ Prompt E: Report Generation → findings[], impression, imagingLimitations
+```
+
+Każdy prompt robi JEDNĄ rzecz — model nie musi jednocześnie wykrywać struktur, oceniać patologii, przypisywać klasyfikacji i pisać raportu. Specjalizacja promptów → dokładniejsze wykrywanie patologii, mniej błędów klasyfikacyjnych, lepsza zgodność z checklistami domenowymi z `examTypePrompts.ts`.
+
+**Implementacja:** Wszystkie etapy w `claude.ts` jako sekwencja wywołań — jeden `analyze-image` call po stronie API nadal zwraca `{ structuredFindings, reportDraft }`. Złożoność ukryta wewnętrznie.
+
+---
+
+#### Etap 3 — AI Reviewer (Self-Critique Layer)
+
+Drugi model (lub drugi prompt) weryfikuje draft raportu zanim trafi do użytkownika.
+
+**Prompt Reviewer:**
+```
+Jesteś doświadczonym radiologiem weryfikującym draft raportu USG.
+Sprawdź:
+1. Completeness — czy wszystkie obowiązkowe struktury z checklisty zostały ocenione?
+2. Consistency — czy wnioski (impression) logicznie wynikają ze znalezisk?
+3. Classification — czy klasyfikacje (TI-RADS, BI-RADS etc.) są poprawnie uzasadnione?
+4. Hallucinations — czy raport nie zawiera struktur/wymiarów niewidocznych na obrazach?
+
+Zwróć JSON: { issues: string[], corrections: Array<{ field, original, corrected }>, approved: boolean }
+```
+
+**Auto-correction:**
+```
+Draft → Reviewer → issues[] → Correction prompt → Final Draft → User
+```
+
+Jeśli `approved: true` — draft trafia do użytkownika bez zmian (typowy przypadek dla dobrego obrazu).
+Jeśli `approved: false` — Claude generuje poprawioną wersję uwzględniającą `corrections[]`.
+Użytkownik widzi wyłącznie wersję końcową — zero dodatkowych kroków.
+
+**Efekt:** Wyższy jakościowo pierwszy draft, mniej ręcznych poprawek radiologa, większe zaufanie do AI.
+
+---
+
+### Multimodal Radiologist Copilot (`/api/ai/fuse-findings`)
+
+Trzeci tryb generowania — radiolog uploaduje obrazy I jednocześnie nagrywa dyktowanie. AI analizuje oba źródła równolegle, a następnie łączy wyniki w warstwie fuzji.
+
+**Pipeline:**
+
+```
+Step 1 (równolegle):
+  analyze-image → findingsFromImages: Finding[]
+  transcribe + generate-report → findingsFromSpeech: Finding[]
+
+Step 2 — Fusion Layer (/api/ai/fuse-findings):
+  Input: findingsFromImages + findingsFromSpeech
+  Output: FusionResult {
+    confirmedFindings   // finding widoczny NA OBRAZIE i WSPOMNIANY w dyktowaniu → confidence +1 poziom
+    imageOnlyFindings   // widoczny na obrazie, niepomnany — AI sugeruje radiologowi sprawdzenie
+    speechOnlyFindings  // powiedziane przez radiologa, nieznalezione na obrazie
+    conflicts           // sprzeczność: radiolog mówi "8mm", obraz pokazuje co innego
+  }
+```
+
+**Przykład konfliktu wyświetlanego w UI:**
+> "Zmiana opisana przez radiologa nie została odnaleziona na dostarczonych obrazach. Możliwe: obraz wykonany przed lub po zmianie lokalizacji głowicy."
+
+**Efekt dla demo:** AI przestaje wyglądać jak generator tekstu — wygląda jak inteligentny współpracownik który weryfikuje czy radiolog czegoś nie przeoczył lub nie pomylił.
+
+**Prompt fusion layer (System):**
+```
+Masz wyniki dwóch niezależnych analiz tego samego badania USG:
+- Analiza obrazów: lista findings z confidence i lokalizacją
+- Analiza dyktowania radiologa: lista findings z confidence i lokalizacją
+
+Porównaj oba zestawy. Nie zakładaj sprzeczności bez wyraźnych dowodów — wiele pozornych różnic wynika z ujęcia głowicy lub fazy oddechu.
+Zwróć JSON z: confirmedFindings (oba źródła zgodne), imageOnlyFindings, speechOnlyFindings, conflicts (tylko gdy jednoznaczna sprzeczność).
+```
+
+---
+
+### Two-Step AI Pipeline (analiza obrazu)
+
+Wewnętrznie `analyze-image` działa dwuetapowo — ujawnione w UI dla efektu demo:
+
+**Step 1 — Vision Extraction:** Claude wyciąga surowe obserwacje z obrazu w języku angielskim (`observations: string[]`). Np. `["hypoechogenic lesion", "8mm", "right thyroid lobe", "irregular margins"]`.
+
+**Step 2 — Report Generation:** Claude przetwarza obserwacje + kontekst domenowy → strukturyzowane findings z confidence, klasyfikacje formalne (TI-RADS etc.), impression.
+
+**UI:** Między krokami wyświetlić sekcję "Surowe obserwacje AI" jako collapsible — stakeholder widzi co AI „widzi" zanim przetworzy to w raport. Silny efekt demonstracyjny transparentności.
+
+---
+
+### Evidence Layer
+
+Każde finding generowane przez AI zawiera pole `evidence` — skąd AI wzięło to znalezisko:
+
+```typescript
+evidence: {
+  imageIndexes: [1, 3]           // obraz nr 2 i nr 4 (0-based) potwierdzają finding
+  transcriptFragments: ["zmiana 8 mm w prawym płacie"]  // cytat z dyktowania
+}
+```
+
+**UI `evidence-viewer`:** Kliknięcie ikony "źródło" przy finding otwiera panel:
+- Miniatury powiązanych obrazów (podświetlone jeśli możliwe, lub po prostu wskazane numerem)
+- Cytat z transkrypcji jeśli dostępny
+
+**Prompt addition (do Warstwy 1 `analyze-image`):**
+```
+Dla każdego finding podaj: imageIndexes (tablica indeksów obrazów 0-based, na których widoczne).
+Dla każdego finding z generate-report podaj: transcriptFragments (cytaty verbatim z transkrypcji).
+```
+
+---
+
+### Differential Diagnosis
+
+AI generuje listę możliwych rozpoznań dla każdego signifikantnego finding w raporcie radiologicznym.
+
+**Prompt addition (do generate-report dla radiologa):**
+```
+Dla każdej istotnej zmiany ogniskowej lub niepewnego znaleziska wygeneruj maksymalnie 3 rozpoznania różnicowe.
+Każde: { diagnosis: string, confidence: 'high'|'medium'|'low', rationale: string (max 150 znaków) }
+```
+
+**Output field:** `RadiologicalReport.differentialDiagnoses: DifferentialDiagnosis[]`
+
+**UI `differential-diagnosis`:** Sekcja "Rozpoznania różnicowe" poniżej findings — zwijana domyślnie, widoczna po kliknięciu. Każde rozpoznanie z badge confidence i jednozdaniowym uzasadnieniem.
+
+---
+
+### AI Insights
+
+Obserwacje AI wykraczające poza formalne findings — nie trafiają do raportu automatycznie, są dodatkową warstwą informacji dla specjalisty.
+
+**Prompt addition:**
+```
+Jeśli widzisz cokolwiek godnego uwagi co NIE kwalifikuje się jako finding (np. cecha atypowa dla kategorii, porównanie z normą populacyjną, sugestia dodatkowego kąta), dodaj do aiInsights[].
+Max 3 insights. Każdy: { title: string (max 60 znaków), description: string (max 200 znaków) }
+Insights są widoczne tylko dla radiologa — nie trafiają do raportu.
+```
+
+**UI `ai-insights`:** Sekcja "Obserwacje AI" z ikoną żarówki — oddzielona wizualnie od raportu formalnego, z nagłówkiem "Nie są częścią raportu".
+
+---
+
+### Chat with Report (`/api/ai/chat`)
+
+Po wygenerowaniu (lub zatwierdzeniu) raportu — radiolog lub lekarz może zadawać pytania AI dotyczące tego konkretnego raportu.
+
+**Input:**
+```typescript
+{ reportId: UUID, question: string }
+```
+
+**Kontekst AI (z store):** images (base64), findings, impression, transcription, examinationType, differentialDiagnoses.
+
+**Przykład:**
+> Radiolog: "Dlaczego przypisałeś TI-RADS 4?"
+> AI: "Zmiana spełnia kryteria TI-RADS 4 ze względu na: hipoechogeniczność (+2 pkt), nieregularne marginesy (+2 pkt), brak mikrozwapnień. Łącznie 4 punkty = TR4."
+
+**System prompt chat:**
+```
+Masz dostęp do raportu radiologicznego i obrazów USG. Odpowiadaj zwięźle i klinicznie.
+Jeśli pytanie wykracza poza dostępne dane — powiedz wprost że nie możesz odpowiedzieć na podstawie tego badania.
+Nie generuj nowych findings poza raportem.
+```
+
+**UI `chat-widget`:** Collapsible panel na dole strony raportu. Pole tekstowe + historia Q&A. Wiadomości nie są zapisywane — session-only.
+
+---
+
+### Patient Communication Generator (`/api/ai/generate-patient-explanation`)
+
+Po zatwierdzeniu raportu — jeden przycisk generuje wersję zrozumiałą dla pacjenta.
+
+**Input:** `reportId` (zatwierdzony raport)
+
+**System prompt:**
+```
+Jesteś asystentem komunikacji medycznej. Przetłumacz raport medyczny na język zrozumiały dla pacjenta bez wykształcenia medycznego.
+Zasady:
+- Unikaj terminologii łacińskiej — zastąp polskim odpowiednikiem
+- Nie bagatelizuj ani nie dramatyzuj wyników
+- Wyraźnie wskaż co jest normą, co wymaga uwagi, jakie są następne kroki
+- Max 200 słów
+- Zakończ zaleceniami (co pacjent powinien zrobić)
+```
+
+**Output:** `patientExplanation: string` zapisane w RadiologicalReport lub MedicalReport.
+
+**UI:** Przycisk "Generuj wyjaśnienie dla pacjenta" widoczny po zatwierdzeniu raportu. Wynik w osobnej karcie — do wydruku lub przekazania SMS/email (poza zakresem POC).
+
+---
+
+### Patient Timeline (`/patients/[id]`)
+
+Profil pacjenta wyświetla oś czasu wszystkich badań — pogrupowaną per typ badania.
+
+**UI `patient-timeline`:**
+```
+USG tarczycy
+  ● 2025-11-02  [zatwierdzony]  "TI-RADS 3, zmiana 6mm"
+  ● 2026-02-15  [zatwierdzony]  "TI-RADS 3, zmiana 8mm"
+  ● 2026-06-01  [zatwierdzony]  "TI-RADS 4, zmiana 11mm — progresja"
+```
+
+**AI-porównanie:** Gdy pacjent ma ≥2 badania tego samego typu — automatyczne wywołanie Claude przy otwarciu profilu:
+
+**Prompt:**
+```
+Porównaj chronologicznie raporty radiologiczne pacjenta tego samego typu badania.
+Dla każdej zmiany opisz: progresja / regresja / stabilna / nowa / ustąpiła.
+Max 3 zdania. Nie diagnozuj — opisuj zmiany między badaniami.
+```
+
+**Output:** Badge przy każdym badaniu: "Progresja — zmiana wzrosła z 6mm → 11mm przez 7 mies." lub "Stabilna przez 18 mies."
+
+---
+
 ### Confidence — UI
 
 | Poziom | Kolor badge | Etykieta tekstowa (PL) | Etykieta tekstowa (EN) |
@@ -574,11 +892,14 @@ Baner `transcriptionQuality` musi być widoczny w edytorze raportu lekarskiego P
    - Wskazanie kliniczne: pole tekstowe (opcjonalne, przepisane ze skierowania)
    - Upload zdjęć: drag & drop, max 5 plików, max **10 MB** każdy (walidacja client-side), podgląd miniatur. Limit 10MB po stronie klienta — sharp na serwerze reskaluje do 1568px (wynik zwykle <2MB). Limit 5MB odrzucałby realne pliki z aparatów USG przed preprocessingiem.
    - Komentarze: textarea (opcjonalne)
-4. **Generowanie draftu** (do wyboru):
-   - Przycisk **"Generuj ze zdjęcia"** → spinner → findings z confidence w edytorze
+4. **Generowanie draftu** (trzy tryby do wyboru):
+   - Przycisk **"Generuj ze zdjęcia"** → Two-Step Pipeline: surowe obserwacje AI (collapsible) → findings z confidence w edytorze
    - Przycisk **"Nagraj głos"** → REC (czerwona pulsująca ikona) → STOP → **Whisper zwraca surową transkrypcję natychmiast** (wyświetlana w readonly preview poniżej przycisku) → **Claude przetwarza w tle** → gdy gotowy, draft zastępuje preview w edytorze. Radiolog może od razu sprawdzić czy Whisper dobrze zrozumiał terminy medyczne, podczas gdy Claude strukturyzuje findings — eliminuje odczucie "czekam na nic".
+   - Przycisk **"Analizuj wielomodalnie"** (aktywny tylko gdy są ZARÓWNO obrazy jak i nagranie) → Multimodal pipeline: analiza obrazów + transkrypcja → Fusion Layer → widok FusionResult z sekcjami: Potwierdzone / Tylko na obrazie / Tylko w dyktowaniu / Konflikty
 5. **Edytor raportu:** Cztery oddzielne edytowalne sekcje (nie jeden textarea):
-   - **Znaleziska** — lista strukturalna. Każde finding jako osobna pozycja z edytowalnym tekstem + badge confidence. Po edycji tekstu finding przez radiologa badge confidence zastępowany ikoną "zmodyfikowane ✎" (badge AI znika — nie można twierdzić że AI jest "pewne" czegoś co radiolog przepisał).
+   - **Znaleziska** — lista strukturalna. Każde finding jako osobna pozycja z edytowalnym tekstem + badge confidence + ikona "źródło" otwierająca `evidence-viewer` (numery obrazów, cytat z transkrypcji). Po edycji tekstu finding przez radiologa badge confidence zastępowany ikoną "zmodyfikowane ✎".
+   - **Rozpoznania różnicowe** — collapsible sekcja `differential-diagnosis` poniżej findings. Każde rozpoznanie z badge confidence i jednozdaniowym rationale.
+   - **Obserwacje AI** — collapsible sekcja `ai-insights` z ikoną żarówki. Oddzielona wizualnie: "Nie są częścią raportu formalnego".
    - **Wnioski** (`impression`) — textarea
    - **Ograniczenia badania** (`imagingLimitations`) — textarea (prefillowane przez AI, edytowalne)
    - **Zalecenia radiologa** (`radiologistRecommendations`) — textarea
@@ -587,7 +908,8 @@ Baner `transcriptionQuality` musi być widoczny w edytorze raportu lekarskiego P
 
    Walidacja przed zatwierdzeniem: przycisk "Zatwierdź" zablokowany gdy `findings[]` jest puste ORAZ `impression` jest puste — przynajmniej jedno z nich musi być wypełnione.
 
-6. **Przycisk "Zatwierdź raport"** → dialog potwierdzający: "Zatwierdzenie raportu jest nieodwracalne. Raport będzie widoczny dla lekarzy. Czy chcesz kontynuować?" → `status: approved`, `approvedAt: timestamp` → raport read-only z oznaczeniem "ZATWIERDZONE [data]" → widoczny dla lekarzy
+6. **Chat with Report** — collapsible panel na dole strony draftu i zatwierdzonego raportu. Radiolog może zapytać AI o uzasadnienie klasyfikacji, porównanie z normą itp. Wiadomości session-only (niezapisywane).
+7. **Przycisk "Zatwierdź raport"** → dialog potwierdzający → `status: approved`, `approvedAt: timestamp` → raport read-only z oznaczeniem "ZATWIERDZONE [data]" → przycisk **"Generuj wyjaśnienie dla pacjenta"** (jednorazowy, po zatwierdzeniu)
 
 ---
 
