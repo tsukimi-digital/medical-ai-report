@@ -137,24 +137,37 @@ type Patient = {
 
 type Confidence = 'high' | 'medium' | 'low'
 
+// Kryteria operacyjne confidence (nie progi %):
+// high   — struktura wyraźnie widoczna, granice ostre, brak alternatywnej interpretacji
+// medium — struktura widoczna, ale granice nieostre LUB możliwa inna interpretacja
+// low    — struktura wnioskowana z kontekstu, częściowo zasłonięta, poza kadrem
+//          LUB wypowiedź radiologa z wahaniem/korektą (w przypadku transkrypcji głosu)
+
 type Finding = {
-  text: string
+  text: string                  // opis znaleziska, max 120 znaków, jedno zdanie
   isDeviation: boolean
   confidence: Confidence
+  anatomicalLocation: string    // np. "wątroba segment VI", "nerka lewa"
 }
+
+type ImageQuality = 'diagnostic' | 'suboptimal' | 'non_diagnostic'
 
 type RadiologicalReport = {
   id: UUID
   patientId: UUID
   radiologistId: UUID
   examinationType: string        // np. "USG jamy brzusznej"
+  clinicalIndication?: string    // wskazanie / skierowanie — kontekst kliniczny dla AI
   images: Array<{               // max 5 zdjęć, max 5MB każde
     base64: string
     mimeType: string
     filename: string
   }>
+  imageQuality?: ImageQuality    // ocena jakości obrazu przez AI
   comments: string               // komentarze radiologa przed generowaniem
   findings: Finding[]            // znaleziska z confidence (jeśli AI)
+  impression?: string            // wnioski kliniczne — najważniejsza część raportu
+  imagingLimitations?: string    // co AI nie mogło ocenić i dlaczego
   rawText: string                // pełna treść raportu do edycji
   aiGenerated: boolean
   status: 'draft' | 'approved'
@@ -162,15 +175,19 @@ type RadiologicalReport = {
   approvedAt?: string
 }
 
+type DiagnosisConfidence = 'definitive' | 'probable' | 'differential' | 'possible'
+
 type MedicalReport = {
   id: UUID
   patientId: UUID
   doctorId: UUID
   radiologicalReportId?: UUID
   transcription: string          // surowa transkrypcja Whisper
-  anamnesis: string              // wywiad
-  diagnosis: string              // rozpoznanie
+  anamnesis: string              // wywiad podmiotowy
+  diagnosis: string              // rozpoznanie (z prefiksem jeśli niepewne)
+  diagnosisConfidence: DiagnosisConfidence
   recommendations: string        // zalecenia
+  uncertainItems: string[]       // elementy oznaczone przez AI jako niejasne
   aiGenerated: boolean
   status: 'draft' | 'approved'
   createdAt: string
@@ -197,31 +214,58 @@ Ograniczenie Vercel: funkcje serverless mogą być restartowane po ~15 min nieak
 
 ### Analiza obrazu USG (`/api/ai/analyze-image`)
 
-**Input:** base64 zdjęcia (1–5), examinationType, comments, language
+**Input:** base64 zdjęcia (1–5), examinationType, clinicalIndication, comments, patientAge, patientGender, language
 
-**Prompt Claude Vision:**
+**System prompt (Claude):**
 ```
-Jesteś radiologiem analizującym badanie USG.
+Jesteś ekspertem AI w analizie obrazów ultrasonograficznych.
+
+KRYTERIA CONFIDENCE (stosuj te definicje — nie progi procentowe):
+- "high":   struktura wyraźnie widoczna, granice ostre, brak alternatywnej interpretacji
+- "medium": struktura widoczna, ale granice nieostre LUB inna interpretacja jest możliwa
+- "low":    struktura wnioskowana z kontekstu, częściowo zasłonięta lub poza kadrem
+
+OCENA JAKOŚCI OBRAZU (wykonaj jako PIERWSZĄ czynność):
+- "diagnostic":     obraz wystarczający do wiarygodnej interpretacji
+- "suboptimal":     używalny, ale z ograniczeniami (ruch, słaba penetracja, niepełny kadr)
+- "non_diagnostic": obrazu nie można wiarygodnie zinterpretować
+
+ZAKAZY BEZWZGLĘDNE:
+- Nie wnioskuj o znaleziskach niewidocznych bezpośrednio na obrazie
+- Nie przypisuj "high" na podstawie typowej anatomii — tylko na podstawie tego co WIDAĆ
+- Nie dodawaj zaleceń klinicznych ani diagnoz — opisuj wyłącznie widoczne struktury
+- Nie podawaj wymiarów jeśli nie widzisz skali na obrazie
+
+Gdy imageQuality = "non_diagnostic": zwróć pustą tablicę findings[] i opisz powód w imagingLimitations.
+
+Zwróć wyłącznie poprawny JSON (bez markdown, bez tekstu poza JSON):
+{
+  "imageQuality": "diagnostic" | "suboptimal" | "non_diagnostic",
+  "qualityIssues": string[],
+  "findings": [{
+    "text": string,
+    "isDeviation": boolean,
+    "confidence": "high" | "medium" | "low",
+    "anatomicalLocation": string
+  }],
+  "impression": string,
+  "imagingLimitations": string | null
+}
+```
+
+**User message (Claude):**
+```
 Typ badania: {examinationType}
-Komentarze radiologa: {comments}
-
-Przeanalizuj zdjęcie w kontekście typowych struktur anatomicznych
-i norm dla tego badania.
-
-Opisz TYLKO to co widzisz z pewnością. Dla każdego znaleziska zwróć:
-- text: opis znaleziska
-- isDeviation: czy to odchylenie od normy (true/false)
-- confidence: "high" (>85%), "medium" (60-85%), "low" (<60%)
-
-Jeśli nie możesz ocenić czegoś z wystarczającą pewnością —
-wpisz to jako znalezisko z confidence "low" i opisz co widzisz.
-NIE zgaduj. NIE wnioskuj poza tym co widoczne na obrazie.
-Odpowiedz w języku: {pl|en}
-
-Zwróć JSON: { findings: Finding[], summary: string }
+Wskazanie kliniczne: {clinicalIndication || "Brak"}
+Komentarze radiologa: {comments || "Brak"}
+Pacjent: {patientAge} lat, płeć: {patientGender}
+Liczba obrazów: {imageCount}
+{imageCount > 1 ? "Przeanalizuj wszystkie obrazy łącznie i zwróć jedną skonsolidowaną listę findings. Sprzeczności między obrazami → jedno finding z confidence 'low' opisujące sprzeczność." : ""}
+Język raportu: {pl|en}
 ```
 
-**Output:** `Finding[]` + `summary` — gotowe do wyświetlenia w edytorze z color-coded badge.
+**Output:** `imageQuality` + `Finding[]` + `impression` + `imagingLimitations`.
+Gdy `imageQuality === 'non_diagnostic'` — UI pokazuje baner ostrzeżenia, findings nie są wyświetlane.
 
 ### Transkrypcja głosu (`/api/ai/transcribe`)
 
@@ -233,32 +277,97 @@ Brak dalszego przetwarzania — tekst trafia do generate-report.
 
 **Input:** transkrypcja, rola (`radiologist` | `doctor`), examinationType (opcjonalne), language
 
-**Prompt dla radiologa:**
+**System prompt — radiolog:**
 ```
-Transkrypcja zawiera wypowiedź radiologa podczas badania {examinationType}.
-Wyodrębnij znaleziska medyczne. Jeśli coś jest niejasne — wpisz [WYMAGA UZUPEŁNIENIA].
-NIE dodawaj informacji których nie ma w transkrypcji.
-Odpowiedz w języku: {pl|en}
-Zwróć JSON: { findings: Finding[], summary: string }
+Jesteś asystentem transkrypcji radiologicznej.
+
+KRYTERIA CONFIDENCE DLA GŁOSU:
+- "high":   radiolog stwierdził wyraźnie i bez wahania
+- "medium": radiolog wyraził niepewność ("chyba", "wydaje się", "możliwe że") lub się poprawił
+- "low":    wypowiedź niejasna, urwana lub znaczenie wieloznaczne
+
+ZAKAZY BEZWZGLĘDNE:
+- Nie dodawaj żadnego znaleziska niepodanego w transkrypcji
+- Nie uzupełniaj urwanych stwierdzeń
+- Zachowaj kolejność znalezisk z dyktowania
+
+Zwróć wyłącznie poprawny JSON:
+{
+  "findings": [{
+    "text": string,
+    "isDeviation": boolean,
+    "confidence": "high" | "medium" | "low",
+    "anatomicalLocation": string
+  }],
+  "impression": string,
+  "transcriptionIssues": string[]
+}
 ```
 
-**Prompt dla lekarza:**
+**User message — radiolog:**
 ```
-Transkrypcja zawiera rozmowę lekarza z pacjentem podczas wizyty.
-Wyodrębnij: wywiad (anamnesis), rozpoznanie (diagnosis), zalecenia (recommendations).
-Jeśli coś jest niejasne — wpisz [WYMAGA UZUPEŁNIENIA].
-NIE dodawaj informacji których nie ma w transkrypcji.
-Odpowiedz w języku: {pl|en}
-Zwróć JSON: { anamnesis: string, diagnosis: string, recommendations: string }
+Typ badania: {examinationType}
+Pacjent: {patientAge} lat, płeć: {patientGender}
+Wskazanie kliniczne: {clinicalIndication || "Brak"}
+Język raportu: {pl|en}
+
+Transkrypcja dyktowania radiologa:
+"{transcription}"
+```
+
+**System prompt — lekarz:**
+```
+Jesteś asystentem dokumentacji klinicznej.
+
+REGUŁY:
+- Transkrypcja to nagranie całej wizyty — lekarz i pacjent mówią naprzemiennie
+- Ignoruj powitania, pożegnania, przerywniki niemedyczne ("eee", "yyyy", "właśnie")
+- Lekarz dyktuje wyniki badania fizykalnego w 3. osobie — to NIE jest wywiad pacjenta
+- NIE dodawaj informacji których nie ma w transkrypcji
+
+OBSŁUGA NIEPEWNOŚCI:
+- "prawdopodobnie", "wygląda na", "podejrzewam" → prefiks "Prawdopodobnie:" w diagnosis
+- "może być X albo Y", "różnicowo" → format "Różnicowo: X / Y" w diagnosis
+- "do wykluczenia" → prefiks "Do wykluczenia:" w diagnosis
+- Elementy niejasne → [WYMAGA WERYFIKACJI] w polu + dodaj do uncertainItems
+
+Zwróć wyłącznie poprawny JSON:
+{
+  "anamnesis": string,
+  "diagnosis": string,
+  "diagnosisConfidence": "definitive" | "probable" | "differential" | "possible",
+  "recommendations": string,
+  "uncertainItems": string[]
+}
+```
+
+**User message — lekarz:**
+```
+Pacjent: {patientAge} lat, płeć: {patientGender}
+Język raportu: {pl|en}
+{radiologicalReport ? `Raport radiologiczny USG (kontekst):
+---
+${radiologicalReport.rawText}
+---
+Gdy lekarz odnosi się do wyników USG, uwzględnij to w sekcji diagnosis.` : ""}
+
+Transkrypcja wizyty:
+"{transcription}"
 ```
 
 ### Confidence — UI
 
 | Poziom | Kolor badge | Znaczenie |
 |--------|-------------|-----------|
-| high | Zielony | >85% pewności — można ufać |
-| medium | Żółty | 60–85% — wymaga weryfikacji |
-| low | Czerwony | <60% — AI niepewne, radiolog musi ocenić |
+| high | Zielony | Struktura wyraźna, granice ostre, brak alternatywnej interpretacji |
+| medium | Żółty | Widoczna ale niejednoznaczna — wymaga weryfikacji radiologa |
+| low | Czerwony | AI niepewne — zasłonięta, poza kadrem lub wahanie w dyktowaniu |
+
+| imageQuality | UI |
+|---|---|
+| diagnostic | Brak komunikatu — analiza wyświetlana normalnie |
+| suboptimal | Żółty baner: "Obraz suboptimalny — {qualityIssues}. Wyniki mogą być ograniczone." |
+| non_diagnostic | Czerwony baner: "Obraz niediagnostyczny — analiza niemożliwa." Findings ukryte. |
 
 ---
 
