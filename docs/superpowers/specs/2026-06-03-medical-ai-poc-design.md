@@ -279,7 +279,7 @@ W praktyce: Warstwa 1 (~600 tokenów) jest cache'owana przez 5 minut od ostatnie
 | USG nerek (wodonercze) | SFU grade 0–IV | Ocena rozstrzeni |
 | USG Doppler tętnic szyjnych | NASCET (% zwężenia + PSV/EDV) | Parametry tylko z dyktowania |
 | USG jamy brzusznej | Brak — opis systematyczny | Kolejność: wątroba→CBD→pęcherzyk→trzustka→śledziona→nerki→aorta→wolny płyn |
-| USG ginekologiczne TV | O-RADS / IOTA dla przydatków | Wymaga fazy cyklu |
+| USG ginekologiczne TV | **O-RADS US 2022** (ACR) dla zmian przydatków | Wymaga fazy cyklu. O-RADS US 2022 wybrany jako standard — scoring opisowy (kategorie 1–5), możliwy do zastosowania przez AI na podstawie opisu struktury. IOTA ADNEX pominięty — wymaga parametrów numerycznych z modelu statystycznego, niemożliwe do automatycznego obliczenia z obrazu USG. |
 
 **Ważne ograniczenie AI dla badań Doppler:** parametry przepływu (PSV, EDV, RI) są danymi numerycznymi z aparatu — AI nie widzi ich na statycznym zdjęciu. Pochodzi wyłącznie z dyktowania głosowego radiologa.
 
@@ -645,6 +645,7 @@ Uwaga: "USG naczyniowe (Doppler)" rozbite na konkretne typy — każdy Doppler m
 - Parametry Dopplera (PSV, EDV, RI) niewidoczne na statycznym zdjęciu — AI nie może ich ocenić, pochodzi wyłącznie z dyktowania głosowego
 - Klasyfikacje Bosniak IIF+ wymagają CT/MRI — AI klasyfikuje z USG tylko kategorie I i II, wyższe opisuje jako "wymaga badania kontrastowego"
 - `transcriptionQuality` jest szacowany heurystycznie (długość, ostrzeżenia Whisper) — nie jest to pomiar obiektywny
+- **Aplikacja jest narzędziem demonstracyjnym — nie jest certyfikowanym wyrobem medycznym i nie może być stosowana jako jedyne narzędzie diagnostyczne w warunkach klinicznych.** Wszystkie raporty wymagają weryfikacji i zatwierdzenia przez uprawnionego specjalistę. Szczegółowy plan przygotowania do wdrożenia produkcyjnego: `docs/TODO.md`
 
 ## Disclaimer AI w UI
 
