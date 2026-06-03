@@ -28,10 +28,24 @@ Demo aplikacji usprawniającej pracę radiologa i lekarza przez automatyzację t
 ## Zmienne środowiskowe
 
 ```
-ANTHROPIC_API_KEY=...   # Claude Vision + generowanie raportów
-OPENAI_API_KEY=...      # Whisper transkrypcja
-AUTH_SECRET=...         # Podpisywanie cookie sesji
+ANTHROPIC_API_KEY=...          # Claude Vision + generowanie raportów
+OPENAI_API_KEY=...             # Whisper transkrypcja
+AUTH_SECRET=...                # Podpisywanie cookie sesji
+AI_PIPELINE_ADVANCED=true      # false = Two-Step pipeline (szybszy); true = SIR + Multi-Step + AI Reviewer (dokładniejszy)
 ```
+
+### AI_PIPELINE_ADVANCED — dwa tryby pipeline
+
+| Flaga | Flow | Prompty do Claude | aiQualityCheck | Czas odpowiedzi |
+|-------|------|-------------------|----------------|-----------------|
+| `false` | Two-Step: Vision Extraction → Report Generation | 2 (analyze-image) + 1 (generate-report) | brak (pole `undefined`) | ~10–20s |
+| `true` | SIR → Multi-Step (5 promptów) → AI Reviewer | 8–10 (analyze-image) + 2 (generate-report) | wypełniony | ~30–60s |
+
+**UI przy `false`:** `quality-check-panel` ukryty (brak `aiQualityCheck`). Sekcja "Surowe obserwacje AI" (collapsible) pokazuje raw observations z Vision Extraction.
+
+**UI przy `true`:** `quality-check-panel` widoczny z wynikami AI Reviewer. Sekcja "Surowe obserwacje AI" schowana — SIR jest wewnętrzny, nie eksponowany w UI.
+
+**Nie ma niespójności danych:** wszystkie pola nowego flow (`structuredFindings`, `aiQualityCheck`) są `optional` w typach TypeScript — UI renderuje je warunkowo.
 
 ---
 
@@ -74,7 +88,6 @@ AUTH_SECRET=...         # Podpisywanie cookie sesji
         /transcribe/route.ts         # audio → Whisper → tekst
         /generate-report/route.ts    # tekst + rola → Claude → draft raportu
         /fuse-findings/route.ts      # Multimodal: łączy findings z obrazu i mowy → FusionResult
-        /chat/route.ts               # Chat with Report — Q&A na bazie raportu i obrazów
         /generate-patient-explanation/route.ts  # Approved report → wersja zrozumiała dla pacjenta
     /(auth)
       /login/page.tsx
@@ -113,7 +126,7 @@ AUTH_SECRET=...         # Podpisywanie cookie sesji
     /ai-suggestions.tsx              # Sekcja "AI Suggestions" — differential dx + obserwacje poza raportem formalnym
     /quality-check-panel.tsx         # Kompaktowy panel AI Quality Check (status + lista checks)
     /fusion-result.tsx               # Widok Multimodal: confirmed / imageOnly / speechOnly / conflicts
-    /chat-widget.tsx                 # Chat with Report — pole pytania + odpowiedź AI
+
     /patient-timeline.tsx            # Oś czasu badań pacjenta z AI-porównaniem
 
     /patient-selector.tsx            # Combobox wyszukiwania pacjenta
@@ -885,32 +898,6 @@ Max 3 insights. Każdy: { title: string (max 60 znaków), description: string (m
 
 ---
 
-### Chat with Report (`/api/ai/chat`)
-
-Po wygenerowaniu (lub zatwierdzeniu) raportu — radiolog lub lekarz może zadawać pytania AI dotyczące tego konkretnego raportu.
-
-**Input:**
-```typescript
-{ reportId: UUID, question: string }
-```
-
-**Kontekst AI (z store):** images (base64), findings, impression, transcription, examinationType, differentialDiagnoses.
-
-**Przykład:**
-> Radiolog: "Dlaczego przypisałeś TI-RADS 4?"
-> AI: "Zmiana spełnia kryteria TI-RADS 4 ze względu na: hipoechogeniczność (+2 pkt), nieregularne marginesy (+2 pkt), brak mikrozwapnień. Łącznie 4 punkty = TR4."
-
-**System prompt chat:**
-```
-Masz dostęp do raportu radiologicznego i obrazów USG. Odpowiadaj zwięźle i klinicznie.
-Jeśli pytanie wykracza poza dostępne dane — powiedz wprost że nie możesz odpowiedzieć na podstawie tego badania.
-Nie generuj nowych findings poza raportem.
-```
-
-**UI `chat-widget`:** Collapsible panel na dole strony raportu. Pole tekstowe + historia Q&A. Wiadomości nie są zapisywane — session-only.
-
----
-
 ### Patient Communication Generator (`/api/ai/generate-patient-explanation`)
 
 **Case A / radiolog:** Generowane po zatwierdzeniu raportu — przycisk "Generuj wyjaśnienie dla pacjenta".
@@ -1036,12 +1023,11 @@ Radiolog wybiera tryb generowania na etapie kroku 4. Reszta flow identyczna.
    ```
    Panel wspiera szybkie skanowanie — radiolog widzi co wymaga uwagi bez szukania w całym raporcie.
    
-   Draft z AI oznaczony stałym badge'em "Wygenerowane przez AI — wymaga weryfikacji" (widoczny dopóki status = draft). Po zatwierdzeniu: badge zmienia się na "Zweryfikowane przez [imię] — [data]".
+   Draft z AI oznaczony stałym badge'em "Wygenerowane przez AI — wymaga weryfikacji" (widoczny dopóki status = draft). Po zatwierdzeniu: badge zmienia się na "Raport zatwierdzony przez [imię] — [data]. Źródło AI: [zdjęcia USG | nagranie głosowe | multimodal]" — zachowuje proweniencję AI w finalnym dokumencie. Źródło mapuje się z pola `analysisMode` raportu.
 
    Walidacja przed zatwierdzeniem: przycisk "Zatwierdź" zablokowany gdy `findings[]` jest puste ORAZ `impression` jest puste — przynajmniej jedno z nich musi być wypełnione.
 
-6. **Chat with Report** — collapsible panel na dole strony draftu i zatwierdzonego raportu. Radiolog może zapytać AI o uzasadnienie klasyfikacji, porównanie z normą itp. Wiadomości session-only (niezapisywane).
-7. **Przycisk "Zatwierdź raport"** → dialog potwierdzający → `status: approved`, `approvedAt: timestamp` → raport read-only z oznaczeniem "ZATWIERDZONE [data]" → przycisk **"Generuj wyjaśnienie dla pacjenta"** (jednorazowy, po zatwierdzeniu)
+6. **Przycisk "Zatwierdź raport"** → dialog potwierdzający → `status: approved`, `approvedAt: timestamp` → raport read-only z oznaczeniem "ZATWIERDZONE [data]" → przycisk **"Generuj wyjaśnienie dla pacjenta"** (jednorazowy, po zatwierdzeniu)
 
 ---
 
@@ -1152,7 +1138,7 @@ Stały pasek informacyjny w `(app)/layout.tsx` — widoczny na każdej stronie a
 
 > "System AI wspomagający — wszystkie raporty wymagają weryfikacji i zatwierdzenia przez uprawnionego specjalistę. Nie stosować jako jedynego narzędzia diagnostycznego."
 
-Każdy draft raportu (przed zatwierdzeniem) oznaczony badge'em: **"Wygenerowane przez AI — wymaga weryfikacji"**. Po zatwierdzeniu przez radiologa/lekarza: badge zmienia się na **"Zweryfikowane przez [imię] — [data]"** i raport staje się read-only.
+Każdy draft raportu (przed zatwierdzeniem) oznaczony badge'em: **"Wygenerowane przez AI — wymaga weryfikacji"**. Po zatwierdzeniu przez radiologa/lekarza: badge zmienia się na **"Raport zatwierdzony przez [imię] — [data]. Źródło AI: [zdjęcia USG | nagranie głosowe | multimodal]"** i raport staje się read-only. Adnotacja o proweniencji AI pozostaje widoczna w finalnym dokumencie.
 
 ---
 
