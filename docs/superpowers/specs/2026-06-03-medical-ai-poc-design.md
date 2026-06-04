@@ -96,7 +96,7 @@ AI_PIPELINE_ADVANCED=true      # false = Two-Step pipeline (szybszy); true = SIR
       /dashboard/page.tsx            # Role-based dashboard
       /patients/page.tsx             # Lista pacjentów
       /patients/new/page.tsx         # Formularz nowego pacjenta
-      /patients/[id]/page.tsx        # Profil pacjenta + timeline badań + porównanie AI
+      /patients/[id]/page.tsx        # Profil pacjenta
       /examination/new/page.tsx      # Radiolog: nowe badanie
       /examination/[id]/page.tsx     # Radiolog: podgląd / edycja raportu
       /visit/page.tsx                # Lekarz: nowa wizyta
@@ -127,7 +127,7 @@ AI_PIPELINE_ADVANCED=true      # false = Two-Step pipeline (szybszy); true = SIR
     /quality-check-panel.tsx         # Kompaktowy panel AI Quality Check (status + lista checks)
     /fusion-result.tsx               # Widok Multimodal: confirmed / imageOnly / speechOnly / conflicts
 
-    /patient-timeline.tsx            # Oś czasu badań pacjenta z AI-porównaniem
+
 
     /patient-selector.tsx            # Combobox wyszukiwania pacjenta
     /report-selector.tsx             # Dropdown raportów radiologicznych pacjenta
@@ -920,31 +920,6 @@ Zwróć JSON: { plainLanguageSummary, keyFindings[], nextSteps[], followUp }
 
 **UI (Case A):** Osobna zakładka "Dla pacjenta" po zatwierdzeniu — sekcje keyFindings, nextSteps, followUp. Do wydruku lub przekazania (poza zakresem POC).
 **UI (Case C):** Panel "Dla pacjenta" renderowany obok raportu lekarskiego — draft edytowalny, zatwierdzany razem z raportem.
-
----
-
-### Patient Timeline (`/patients/[id]`)
-
-Profil pacjenta wyświetla oś czasu wszystkich badań — pogrupowaną per typ badania.
-
-**UI `patient-timeline`:**
-```
-USG tarczycy
-  ● 2025-11-02  [zatwierdzony]  "TI-RADS 3, zmiana 6mm"
-  ● 2026-02-15  [zatwierdzony]  "TI-RADS 3, zmiana 8mm"
-  ● 2026-06-01  [zatwierdzony]  "TI-RADS 4, zmiana 11mm — progresja"
-```
-
-**AI-porównanie:** Gdy pacjent ma ≥2 badania tego samego typu — automatyczne wywołanie Claude przy otwarciu profilu:
-
-**Prompt:**
-```
-Porównaj chronologicznie raporty radiologiczne pacjenta tego samego typu badania.
-Dla każdej zmiany opisz: progresja / regresja / stabilna / nowa / ustąpiła.
-Max 3 zdania. Nie diagnozuj — opisuj zmiany między badaniami.
-```
-
-**Output:** Badge przy każdym badaniu: "Progresja — zmiana wzrosła z 6mm → 11mm przez 7 mies." lub "Stabilna przez 18 mies."
 
 ---
 
