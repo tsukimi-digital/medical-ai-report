@@ -50,6 +50,8 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const patient = store.createPatient(parsed.data)
+  const dob = new Date(parsed.data.dateOfBirth)
+  const age = new Date().getFullYear() - dob.getFullYear()
+  const patient = store.createPatient({ ...parsed.data, age })
   return NextResponse.json({ patient }, { status: 201 })
 }

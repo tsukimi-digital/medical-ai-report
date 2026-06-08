@@ -11,7 +11,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const report = store.getRadiologyReport(params.id)
+  const report = store.getRadiologicalReport(params.id)
   if (!report) {
     return NextResponse.json({ error: 'Report not found' }, { status: 404 })
   }
@@ -36,6 +36,6 @@ export async function PATCH(
     )
   }
 
-  const approved = store.approveRadiologyReport(params.id, session.user.id, session.user.name)
+  const approved = store.approveRadiologicalReport(params.id, session.user.id, session.user.name)
   return NextResponse.json({ report: approved })
 }
