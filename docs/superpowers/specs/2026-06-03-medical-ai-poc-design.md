@@ -1,13 +1,14 @@
-# Medical AI POC — Design Spec
+# Sonara — Medical AI POC — Design Spec
 **Data:** 2026-06-03  
 **Status:** Zatwierdzony  
-**Typ:** POC / Demo dla klienta
+**Typ:** POC / Demo dla klienta  
+**Nazwa aplikacji:** Sonara
 
 ---
 
 ## Cel
 
-Demo aplikacji usprawniającej pracę radiologa i lekarza przez automatyzację tworzenia raportów medycznych z użyciem AI (analiza obrazu USG + transkrypcja głosu). Aplikacja pokazuje klientowi nowy flow pracy i pozwala ocenić czy automatyzacja faktycznie przyspiesza pracę.
+**Sonara** to demo aplikacji usprawniającej pracę radiologa i lekarza przez automatyzację tworzenia raportów medycznych z użyciem AI (analiza obrazu USG + transkrypcja głosu). Aplikacja pokazuje klientowi nowy flow pracy i pozwala ocenić czy automatyzacja faktycznie przyspiesza pracę.
 
 ---
 
