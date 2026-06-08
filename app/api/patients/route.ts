@@ -1,0 +1,8 @@
+// BE1: implement GET /api/patients (list) and POST /api/patients (create)
+export async function GET() {
+  return Response.json({ error: 'not implemented' }, { status: 501 })
+}
+
+export async function POST() {
+  return Response.json({ error: 'not implemented' }, { status: 501 })
+}
