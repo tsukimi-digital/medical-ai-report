@@ -1,17 +1,20 @@
 import { defineConfig } from 'vitest/config'
-import { resolve } from 'path'
+import react from '@vitejs/plugin-react'
+import path from 'path'
 
 export default defineConfig({
+  plugins: [react()],
   test: {
-    environment: 'node',
+    environment: 'jsdom',
     globals: true,
+    setupFiles: './tests/setup.ts',
     env: {
       AUTH_SECRET: 'test-secret-for-unit-tests-only-32chars!',
     },
   },
   resolve: {
     alias: {
-      '@': resolve(__dirname, '.'),
+      '@': path.resolve(__dirname, '.'),
     },
   },
 })

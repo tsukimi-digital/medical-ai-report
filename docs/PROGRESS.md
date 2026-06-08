@@ -11,32 +11,32 @@
 - [x] Pliki placeholder
 
 ## Faza 1 — UI (FE: Yuki Sato)
-- [ ] app/(auth)/login/page.tsx
-- [ ] app/(app)/layout.tsx (navbar + disclaimer)
-- [ ] app/(app)/dashboard/page.tsx
-- [ ] app/(app)/patients/page.tsx
-- [ ] app/(app)/patients/new/page.tsx
-- [ ] app/(app)/patients/[id]/page.tsx
-- [ ] app/(app)/examination/new/page.tsx
-- [ ] app/(app)/examination/[id]/page.tsx
-- [ ] app/(app)/visit/page.tsx
-- [ ] app/(app)/visit/[id]/page.tsx
-- [ ] components/ui/* (design system)
-- [ ] components/voice-recorder.tsx
-- [ ] components/image-uploader.tsx
-- [ ] components/examination-context-fields.tsx
-- [ ] components/report-editor.tsx
-- [ ] components/findings-list.tsx
-- [ ] components/evidence-viewer.tsx
-- [ ] components/ai-suggestions.tsx
-- [ ] components/quality-check-panel.tsx
-- [ ] components/fusion-result.tsx
-- [ ] components/patient-selector.tsx
-- [ ] components/report-selector.tsx
-- [ ] components/examination-type-select.tsx
-- [ ] lib/i18n/{pl.ts,en.ts,index.ts}
-- [ ] lib/api-client.ts (mock client)
-- [ ] Testy jednostkowe FE
+- [x] app/(auth)/login/page.tsx
+- [x] app/(app)/layout.tsx (navbar + disclaimer)
+- [x] app/(app)/dashboard/page.tsx
+- [x] app/(app)/patients/page.tsx
+- [x] app/(app)/patients/new/page.tsx
+- [x] app/(app)/patients/[id]/page.tsx
+- [x] app/(app)/examination/new/page.tsx
+- [x] app/(app)/examination/[id]/page.tsx
+- [x] app/(app)/visit/page.tsx
+- [x] app/(app)/visit/[id]/page.tsx
+- [x] components/ui/* (design system: icon, button, badge, modal, banner, collapse, combobox)
+- [x] components/voice-recorder.tsx
+- [x] components/image-uploader.tsx
+- [x] components/examination-context-fields.tsx
+- [x] components/report-editor.tsx
+- [x] components/findings-list.tsx
+- [x] components/evidence-viewer.tsx
+- [x] components/ai-suggestions.tsx
+- [x] components/quality-check-panel.tsx
+- [x] components/fusion-result.tsx
+- [x] components/patient-selector.tsx
+- [x] components/report-selector.tsx
+- [x] components/examination-type-select.tsx
+- [x] lib/i18n/{pl.ts,en.ts,index.ts}
+- [x] lib/api-client.ts (mock client, 4 Golden Cases)
+- [x] Testy jednostkowe FE (30 testów — i18n, api-client, validation, badge)
 
 ## Faza 2a — Auth + dane (BE1: Kenji Mori)
 - [x] middleware.ts
