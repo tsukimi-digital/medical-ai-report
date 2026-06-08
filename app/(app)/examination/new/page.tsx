@@ -50,6 +50,7 @@ export default function NewExaminationPage() {
     formData.append('examinationType', examType!)
     formData.append('clinicalIndication', indication)
     formData.append('examinationContext', JSON.stringify(context))
+    formData.append('comments', comments)
     formData.append('patientAge', String(patient!.age))
     formData.append('patientGender', patient!.gender)
     formData.append('language', lang)
