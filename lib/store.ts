@@ -13,7 +13,7 @@ import type {
 export const SEED_USERS: SeedUser[] = [
   { id: 'u-rad1', name: 'dr Anna Lewandowska', email: 'rad1@demo.pl', role: 'radiologist', initials: 'AL', password: 'demo2024' },
   { id: 'u-rad2', name: 'dr Piotr Zieliński',  email: 'rad2@demo.pl', role: 'radiologist', initials: 'PZ', password: 'demo2024' },
-  { id: 'u-rad3', name: 'dr Katarzyna Wiśniewska', email: 'rad3@demo.pl', role: 'radiologist', initials: 'KW', password: 'demo2024' },
+  { id: 'u-rad3', name: 'dr Katarzyna Wróbel',     email: 'rad3@demo.pl', role: 'radiologist', initials: 'KW', password: 'demo2024' },
   { id: 'u-doc1', name: 'lek. Marta Sawicka',  email: 'doc1@demo.pl', role: 'doctor', initials: 'MS', password: 'demo2024' },
   { id: 'u-doc2', name: 'lek. Jan Kowalczyk',  email: 'doc2@demo.pl', role: 'doctor', initials: 'JK', password: 'demo2024' },
   { id: 'u-doc3', name: 'lek. Tomasz Kwiatkowski', email: 'doc3@demo.pl', role: 'doctor', initials: 'TK', password: 'demo2024' },

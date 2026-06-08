@@ -1,30 +1,14 @@
 export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getIronSession } from 'iron-session'
-import { cookies } from 'next/headers'
+import { getSession } from '@/lib/auth'
 import { analyzeImages } from '@/lib/ai/claude'
 import { preprocessImage } from '@/lib/ai/image-preprocessor'
 
-interface SessionData {
-  userId?: string
-  role?: string
-}
-
-const SESSION_OPTIONS = {
-  cookieName: 'sonara_session',
-  password: process.env.AUTH_SECRET ?? 'dev-secret-minimum-32-chars-long-ok',
-  cookieOptions: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
-  },
-}
-
 export async function POST(request: NextRequest) {
   // Auth check
-  const session = await getIronSession<SessionData>(await cookies(), SESSION_OPTIONS)
-  if (!session.userId) {
+  const session = await getSession()
+  if (!session.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -45,6 +29,10 @@ export async function POST(request: NextRequest) {
   for (const file of imageFiles) {
     if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json({ error: `Image ${file.name} exceeds 5 MB limit` }, { status: 400 })
+    }
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      return NextResponse.json({ error: 'Niedozwolony typ pliku. Akceptowane: JPEG, PNG, GIF, WebP.' }, { status: 400 })
     }
   }
 

@@ -1,29 +1,13 @@
 export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getIronSession } from 'iron-session'
-import { cookies } from 'next/headers'
+import { getSession } from '@/lib/auth'
 import { transcribeAudio } from '@/lib/ai/whisper'
-
-interface SessionData {
-  userId?: string
-  role?: string
-}
-
-const SESSION_OPTIONS = {
-  cookieName: 'sonara_session',
-  password: process.env.AUTH_SECRET ?? 'dev-secret-minimum-32-chars-long-ok',
-  cookieOptions: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
-  },
-}
 
 export async function POST(request: NextRequest) {
   // Auth check
-  const session = await getIronSession<SessionData>(await cookies(), SESSION_OPTIONS)
-  if (!session.userId) {
+  const session = await getSession()
+  if (!session.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
