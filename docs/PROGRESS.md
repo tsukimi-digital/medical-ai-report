@@ -55,17 +55,17 @@
 - [ ] Testy jednostkowe BE1
 
 ## Faza 2b — AI + store (BE2: Akira Yamamoto)
-- [ ] lib/store.ts
-- [ ] lib/ai/claude.ts
-- [ ] lib/ai/whisper.ts
-- [ ] lib/ai/examTypePrompts.ts
-- [ ] lib/ai/image-preprocessor.ts
-- [ ] app/api/ai/analyze-image/route.ts
-- [ ] app/api/ai/transcribe/route.ts
-- [ ] app/api/ai/generate-report/route.ts
-- [ ] app/api/ai/fuse-findings/route.ts
-- [ ] app/api/ai/generate-patient-explanation/route.ts
-- [ ] Testy jednostkowe BE2
+- [x] lib/store.ts
+- [x] lib/ai/claude.ts
+- [x] lib/ai/whisper.ts
+- [x] lib/ai/examTypePrompts.ts
+- [x] lib/ai/image-preprocessor.ts
+- [x] app/api/ai/analyze-image/route.ts
+- [x] app/api/ai/transcribe/route.ts
+- [x] app/api/ai/generate-report/route.ts
+- [x] app/api/ai/fuse-findings/route.ts
+- [x] app/api/ai/generate-patient-explanation/route.ts
+- [x] Testy jednostkowe BE2
 
 ## Faza 5 — QA (Mei Nakamura) — po merge FE+BE1+BE2
 - [ ] tests/e2e/login.spec.ts
