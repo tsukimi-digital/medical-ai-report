@@ -5,6 +5,24 @@ import { z } from 'zod'
 // Re-declare the same schemas as in API routes (pure logic, no Next.js deps)
 // ---------------------------------------------------------------------------
 
+const UpdateRadiologyReportSchema = z.object({
+  findings: z.array(z.any()).optional(),
+  impression: z.string().optional(),
+  imagingLimitations: z.string().optional(),
+  radiologistRecommendations: z.string().optional(),
+  comments: z.string().optional(),
+}).strict()
+
+const UpdateMedicalReportSchema = z.object({
+  transcription: z.string().optional(),
+  anamnesis: z.string().optional(),
+  diagnosis: z.string().optional(),
+  diagnosisConfidence: z.enum(['definitive', 'probable', 'differential', 'possible']).optional(),
+  recommendations: z.string().optional(),
+  uncertainItems: z.array(z.string()).optional(),
+  comments: z.string().optional(),
+}).strict()
+
 const PatientSchema = z.object({
   firstName: z.string().min(1, 'firstName is required'),
   lastName: z.string().min(1, 'lastName is required'),
@@ -254,5 +272,73 @@ describe('Medical approve rule', () => {
     const result = canApproveMedicalReport({})
     expect(result.allowed).toBe(false)
     expect(result.missingFields).toHaveLength(3)
+  })
+})
+
+describe('UpdateRadiologyReportSchema — PUT allowlist', () => {
+  it('accepts empty object (no fields to update)', () => {
+    const result = UpdateRadiologyReportSchema.safeParse({})
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts allowed fields', () => {
+    const result = UpdateRadiologyReportSchema.safeParse({
+      impression: 'Normal exam.',
+      comments: 'Follow up in 6 months.',
+      imagingLimitations: 'Patient movement',
+      radiologistRecommendations: 'No further workup needed.',
+      findings: [{ id: 'f1', text: 'Finding A' }],
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects unknown fields (mass assignment protection)', () => {
+    const result = UpdateRadiologyReportSchema.safeParse({
+      impression: 'ok',
+      status: 'approved', // should be blocked
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects id field', () => {
+    const result = UpdateRadiologyReportSchema.safeParse({ id: 'new-id' })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('UpdateMedicalReportSchema — PUT allowlist', () => {
+  it('accepts empty object (no fields to update)', () => {
+    const result = UpdateMedicalReportSchema.safeParse({})
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts allowed fields', () => {
+    const result = UpdateMedicalReportSchema.safeParse({
+      anamnesis: 'Patient reports pain.',
+      diagnosis: 'Strain',
+      diagnosisConfidence: 'probable',
+      recommendations: 'Rest.',
+      transcription: 'Some text',
+      uncertainItems: ['item1'],
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects unknown fields (mass assignment protection)', () => {
+    const result = UpdateMedicalReportSchema.safeParse({
+      anamnesis: 'ok',
+      doctorId: 'another-doctor', // should be blocked
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects status field', () => {
+    const result = UpdateMedicalReportSchema.safeParse({ status: 'approved' })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects invalid diagnosisConfidence value', () => {
+    const result = UpdateMedicalReportSchema.safeParse({ diagnosisConfidence: 'certain' })
+    expect(result.success).toBe(false)
   })
 })

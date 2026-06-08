@@ -25,8 +25,13 @@ export interface SessionData {
 // ---------------------------------------------------------------------------
 // iron-session configuration — matches api-contract.md
 // ---------------------------------------------------------------------------
+
+if (!process.env.AUTH_SECRET) {
+  throw new Error('AUTH_SECRET environment variable is required')
+}
+
 export const sessionOptions: SessionOptions = {
-  password: process.env.AUTH_SECRET as string,
+  password: process.env.AUTH_SECRET,
   cookieName: 'sonara_session',
   cookieOptions: {
     httpOnly: true,

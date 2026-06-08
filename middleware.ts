@@ -34,5 +34,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   // Protect (app) pages and API routes (except /api/auth which is public)
-  matcher: ['/(app)/:path*'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|api/auth).*)',
+  ],
 }

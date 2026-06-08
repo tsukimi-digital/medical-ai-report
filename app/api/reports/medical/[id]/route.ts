@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { getSession } from '@/lib/auth'
 import { store } from '@/lib/store'
+
+const UpdateMedicalReportSchema = z.object({
+  transcription: z.string().optional(),
+  anamnesis: z.string().optional(),
+  diagnosis: z.string().optional(),
+  diagnosisConfidence: z.enum(['definitive', 'probable', 'differential', 'possible']).optional(),
+  recommendations: z.string().optional(),
+  uncertainItems: z.array(z.string()).optional(),
+  comments: z.string().optional(),
+}).strict()
 
 export async function GET(
   _request: NextRequest,
@@ -43,13 +54,18 @@ export async function PUT(
     return NextResponse.json({ error: 'Forbidden: approved reports cannot be modified' }, { status: 403 })
   }
 
-  let body: unknown
+  let rawBody: unknown
   try {
-    body = await request.json()
+    rawBody = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const updated = store.updateMedicalReport(params.id, body as Partial<typeof report>)
+  const parsed = UpdateMedicalReportSchema.safeParse(rawBody)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  }
+
+  const updated = store.updateMedicalReport(params.id, parsed.data)
   return NextResponse.json({ report: updated })
 }
