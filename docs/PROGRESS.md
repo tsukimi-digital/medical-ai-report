@@ -104,3 +104,21 @@
 - [x] tests/e2e/case-d.spec.ts (suboptimal banner + Wymaga weryfikacji)
 - [x] tests/e2e/dashboard.spec.ts (radiolog + lekarz dashboard)
 - [x] tests/e2e/navigation.spec.ts (navbar, disclaimer, lang toggle, logout, keyboard)
+
+## Faza 5b — QA Update post-integration (Mei Nakamura)
+- [x] Bug fix: auth.ts loginViaApi → używa formularza logowania (ustawia in-memory sessionUser)
+- [x] Bug fix: app/(app)/layout.tsx → re-hydratacja sessionUser z /api/auth/me przy hard refresh
+- [x] tests/e2e/new-ui-elements.spec.ts — 11 nowych testów produktowych:
+  - [x] Brak banera jakości transkrypcji gdy quality='good' (med-C)
+  - [x] Badge-AI na szkicu wizyty (med-C: aiGenerated=true, status=draft)
+  - [x] Brak badge-AI na zatwierdzonej wizycie (med-seed-1: status=approved)
+  - [x] Baner ostrzegawczy dla suboptimal (rad-D) — bez "Kontynuuj bez AI"
+  - [x] Toast przy zmianie języka PL→EN
+  - [x] Auto-dismiss toastu po ~4 sekundach
+  - [x] Treść toastu zawiera informację o języku raportu
+  - [x] rad-A ładuje dane przez realne API (TI-RADS, findings)
+  - [x] Pełny cykl approve (rad-A): Zatwierdź → modal → confirm → badge-approved
+  - [x] Badge-AI widoczny na szkicu (rad-B — izolacja od mutacji approve)
+  - [x] rad-A-appr: badge-approved, brak badge-AI, brak przycisku Zatwierdź
+- [x] Weryfikacja gate: fetch( w api-client.ts → 21 wywołań (> 0 ✓)
+- [x] Wynik: 79 testów — 79 passed, 0 failed
