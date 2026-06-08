@@ -10,7 +10,7 @@ type BadgeVariant =
 type BadgeProps = {
   variant?: BadgeVariant
   dot?: boolean
-  children: ReactNode
+  children?: ReactNode
   className?: string
 }
 
