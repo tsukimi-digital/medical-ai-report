@@ -342,3 +342,43 @@ describe('UpdateMedicalReportSchema — PUT allowlist', () => {
     expect(result.success).toBe(false)
   })
 })
+
+// ---------------------------------------------------------------------------
+// PESEL checksum validation (FE client-side — standalone, no Zod)
+// ---------------------------------------------------------------------------
+
+function validatePesel(pesel: string): boolean {
+  return /^\d{11}$/.test(pesel)
+}
+
+function validatePeselChecksum(pesel: string): boolean {
+  if (!validatePesel(pesel)) return false
+  const weights = [1, 3, 7, 9, 1, 3, 7, 9, 1, 3]
+  const digits = pesel.split('').map(Number)
+  const sum = weights.reduce((acc, w, i) => acc + w * digits[i], 0)
+  const checkDigit = (10 - (sum % 10)) % 10
+  return checkDigit === digits[10]
+}
+
+describe('PESEL checksum validation', () => {
+  it('accepts valid PESELs with correct checksum', () => {
+    expect(validatePeselChecksum('74050512388')).toBe(true)
+    expect(validatePeselChecksum('65021034177')).toBe(true)
+    expect(validatePeselChecksum('81071245699')).toBe(true)
+    expect(validatePeselChecksum('90031567422')).toBe(true)
+  })
+
+  it('rejects strings shorter than 11 digits', () => {
+    expect(validatePesel('1234567890')).toBe(false)
+    expect(validatePesel('')).toBe(false)
+  })
+
+  it('rejects strings longer than 11 digits', () => {
+    expect(validatePesel('123456789012')).toBe(false)
+  })
+
+  it('rejects non-digit characters', () => {
+    expect(validatePesel('7405051238X')).toBe(false)
+    expect(validatePesel('74050512 88')).toBe(false)
+  })
+})
