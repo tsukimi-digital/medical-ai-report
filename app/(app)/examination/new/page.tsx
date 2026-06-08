@@ -124,10 +124,9 @@ export default function NewExaminationPage() {
             patientAge: patient.age,
             patientGender: patient.gender as 'M' | 'F',
             language: lang,
-          })
+          }) as Partial<import('@/lib/types').RadiologicalReport>
           await apiClient.updateRadReport(report.id, {
-            ...(draft as Parameters<typeof apiClient.updateRadReport>[1]),
-            transcription,
+            ...draft,
             aiGenerated: true,
           })
         } finally {
@@ -145,7 +144,7 @@ export default function NewExaminationPage() {
           apiClient.analyzeImage(buildImageFormData()),
           apiClient.transcribeAudio(voiceBlob!.blob, lang).then(async ({ transcription }) => {
             setRawTranscription(transcription)
-            const report = await apiClient.generateReport({
+            const voiceDraft = await apiClient.generateReport({
               transcription,
               role: 'radiologist',
               examinationType: examType,
@@ -153,17 +152,14 @@ export default function NewExaminationPage() {
               patientAge: patient!.age,
               patientGender: patient!.gender as 'M' | 'F',
               language: lang,
-            }) as { findings?: Parameters<typeof apiClient.updateRadReport>[1]['findings'] }
-            return { transcription, report }
+            }) as Partial<import('@/lib/types').RadiologicalReport>
+            return { transcription, findings: voiceDraft.findings ?? [] }
           }),
         ])
 
-        const imageFindingsArr = imageResult.findings ?? []
-        const speechFindingsArr = (voiceResult.report.findings ?? []) as Parameters<typeof apiClient.updateRadReport>[1]['findings'] ?? []
-
         const fusionResult = await apiClient.fuseFindings({
-          findingsFromImages: imageFindingsArr,
-          findingsFromSpeech: speechFindingsArr as import('@/lib/types').Finding[],
+          findingsFromImages: imageResult.findings ?? [],
+          findingsFromSpeech: voiceResult.findings,
         })
 
         await apiClient.updateRadReport(report.id, {
@@ -176,7 +172,6 @@ export default function NewExaminationPage() {
           aiSuggestions: imageResult.aiSuggestions,
           aiQualityCheck: imageResult.aiQualityCheck,
           imageCount: images.length,
-          transcription: voiceResult.transcription,
           aiGenerated: true,
         })
 
