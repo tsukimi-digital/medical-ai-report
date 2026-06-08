@@ -10,9 +10,12 @@ import type {
   PatientInput,
   RadiologicalReport,
   RadiologyReportInput,
+  RadiologyReportDraft,
   MedicalReport,
   MedicalReportInput,
+  MedicalReportDraft,
   ImageAnalysisResult,
+  ExaminationContext,
   FusionResult,
   PatientExplanation,
   Finding,
@@ -525,20 +528,22 @@ export const aiClient = {
     transcription: string
     role: 'radiologist' | 'doctor'
     examinationType?: string
+    examinationContext?: ExaminationContext
     patientAge: number
     patientGender: 'M' | 'F'
     language: 'pl' | 'en'
     radiologicalReportId?: string
-  }): Promise<unknown> {
+  }): Promise<RadiologyReportDraft | MedicalReportDraft> {
     await delay(2000)
     if (params.role === 'radiologist') {
-      return {
+      const draft: RadiologyReportDraft = {
         findings: CASE_B.findings,
         impression: CASE_B.impression,
         aiQualityCheck: CASE_B.aiQualityCheck,
       }
+      return draft
     }
-    return {
+    const draft: MedicalReportDraft = {
       anamnesis: CASE_C.anamnesis,
       diagnosis: CASE_C.diagnosis,
       diagnosisConfidence: CASE_C.diagnosisConfidence,
@@ -547,6 +552,7 @@ export const aiClient = {
       patientExplanation: CASE_C.patientExplanation,
       aiQualityCheck: CASE_C.aiQualityCheck,
     }
+    return draft
   },
 
   async fuseFindings(

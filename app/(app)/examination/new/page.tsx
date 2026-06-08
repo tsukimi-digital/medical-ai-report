@@ -32,6 +32,7 @@ export default function NewExaminationPage() {
   const [mode, setMode] = useState<GenMode>('image')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [manualMode, setManualMode] = useState(false)
 
   useEffect(() => {
     apiClient.getPatients().then(({ patients }) => setPatients(patients))
@@ -51,6 +52,7 @@ export default function NewExaminationPage() {
       return
     }
     setError(null)
+    setManualMode(false)
     setLoading(true)
     try {
       // Create draft report
@@ -62,6 +64,44 @@ export default function NewExaminationPage() {
         comments: comments || undefined,
         analysisMode: mode as AnalysisMode,
       })
+
+      // Invoke AI image analysis for image/multimodal modes
+      if (mode === 'image' || mode === 'multimodal') {
+        const formData = new FormData()
+        images.forEach((img) => formData.append('images', img))
+        formData.append('examinationType', examType)
+        formData.append('clinicalIndication', indication)
+        formData.append('examinationContext', JSON.stringify(context))
+        formData.append('patientAge', String(patient.age))
+        formData.append('patientGender', patient.gender)
+        formData.append('language', lang)
+
+        const imageAnalysis = await apiClient.analyzeImage(formData)
+
+        // Handle fallback — AI unavailable
+        if ('fallback' in imageAnalysis && (imageAnalysis as unknown as { fallback: boolean; error: string }).fallback) {
+          const fallbackResult = imageAnalysis as unknown as { fallback: boolean; error: string }
+          setError(fallbackResult.error)
+          setManualMode(true)
+          setLoading(false)
+          return
+        }
+
+        // Persist AI analysis results onto the draft report
+        await apiClient.updateRadReport(report.id, {
+          findings: imageAnalysis.findings,
+          lowConfidenceFindings: imageAnalysis.lowConfidenceFindings,
+          impression: imageAnalysis.impression,
+          imagingLimitations: imageAnalysis.imagingLimitations ?? undefined,
+          imageQuality: imageAnalysis.imageQuality,
+          rawObservations: imageAnalysis.rawObservations,
+          aiSuggestions: imageAnalysis.aiSuggestions,
+          aiQualityCheck: imageAnalysis.aiQualityCheck,
+          imageCount: images.length,
+          aiGenerated: true,
+        })
+      }
+
       router.push(`/examination/${report.id}`)
     } catch {
       setError(lang === 'en' ? 'Failed to create report.' : 'Nie udało się utworzyć raportu.')
@@ -83,7 +123,17 @@ export default function NewExaminationPage() {
 
         {error && (
           <div style={{ marginBottom: 16 }}>
-            <Banner kind="crit">{error}</Banner>
+            <Banner kind="crit" action={manualMode ? (
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={() => { setManualMode(false); setError(null) }}
+              >
+                {lang === 'en' ? 'Enter manually' : 'Wprowadź ręcznie'}
+              </button>
+            ) : undefined}>
+              {error}
+            </Banner>
           </div>
         )}
 

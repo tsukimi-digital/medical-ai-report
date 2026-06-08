@@ -12,7 +12,7 @@ import { useI18n } from '@/lib/i18n/index'
 import { apiClient } from '@/lib/api-client'
 import { VoiceRecorder } from '@/components/voice-recorder'
 import { QualityCheckPanel } from '@/components/quality-check-panel'
-import type { MedicalReport } from '@/lib/types'
+import type { MedicalReport, Patient } from '@/lib/types'
 
 const NEW_VISIT_ID = 'new'
 
@@ -22,6 +22,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
   const isNew = params.id === NEW_VISIT_ID
 
   const [report, setReport] = useState<MedicalReport | null>(null)
+  const [patient, setPatient] = useState<Patient | null>(null)
   const [loading, setLoading] = useState(!isNew)
   const [error, setError] = useState<string | null>(null)
   const [approving, setApproving] = useState(false)
@@ -31,7 +32,11 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
   useEffect(() => {
     if (isNew) return
     apiClient.getMedReport(params.id)
-      .then(({ report }) => setReport(report))
+      .then(({ report }) => {
+        setReport(report)
+        return apiClient.getPatient(report.patientId)
+      })
+      .then(({ patient }) => setPatient(patient))
       .catch(() => setError(lang === 'en' ? 'Visit not found.' : 'Nie znaleziono wizyty.'))
       .finally(() => setLoading(false))
   }, [params.id, lang, isNew])
@@ -41,25 +46,29 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
     try {
       const { transcription } = await apiClient.transcribe(blob, lang)
       if (!report) {
-        // Create report from transcription
-        const user = apiClient.getSessionUser()
-        const { report: draft } = await apiClient.generateReport({
+        // Create report from transcription — use session user's first available patient as default
+        const sessionUser = apiClient.getSessionUser()
+        const { patients } = await apiClient.getPatients()
+        const defaultPatient = patients[0]
+
+        const draft = await apiClient.generateReport({
           transcription,
           role: 'doctor',
-          patientAge: 50,
-          patientGender: 'F',
+          patientAge: defaultPatient?.age ?? 0,
+          patientGender: (defaultPatient?.gender ?? 'F') as 'M' | 'F',
           language: lang,
-        }) as any
+        })
 
         const { report: created } = await apiClient.createMedReport({
-          patientId: 'p-anna',
+          patientId: defaultPatient?.id ?? 'p-anna',
           transcription,
         })
         const { report: updated } = await apiClient.updateMedReport(created.id, {
-          ...draft,
+          ...(draft as Partial<MedicalReport>),
           transcription,
         })
         setReport(updated)
+        if (defaultPatient) setPatient(defaultPatient)
         router.push(`/visit/${updated.id}`)
       } else {
         setReport((r) => r ? { ...r, transcription } : r)

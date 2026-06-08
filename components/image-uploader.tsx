@@ -92,7 +92,7 @@ export function ImageUploader({
         role="button"
         tabIndex={disabled ? -1 : 0}
         aria-label={`${label}: ${hint}`}
-        className={`panel col center g8`}
+        className={`panel col center g8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600`}
         style={{
           padding: '22px 16px',
           cursor: disabled ? 'not-allowed' : 'pointer',
