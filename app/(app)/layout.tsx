@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
 import { Btn } from '@/components/ui/button'
+import { Toast } from '@/components/ui/toast'
 import { useI18n } from '@/lib/i18n/index'
 import { apiClient } from '@/lib/api-client'
 import type { User } from '@/lib/types'
@@ -13,6 +14,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter()
   const { lang, setLang, t } = useI18n()
   const [user, setUser] = useState<User | null>(null)
+  const [showLangToast, setShowLangToast] = useState(false)
+  const isFirstRender = useRef(true)
 
   useEffect(() => {
     const u = apiClient.getSessionUser()
@@ -22,6 +25,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       setUser(u)
     }
   }, [router])
+
+  // Show toast whenever lang changes (except on first render)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    setShowLangToast(true)
+  }, [lang])
+
+  const handleDismissToast = useCallback(() => setShowLangToast(false), [])
 
   const handleLogout = async () => {
     await apiClient.logout()
@@ -108,6 +122,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
       {/* Page content */}
       <main>{children}</main>
+
+      {/* Lang change toast */}
+      {showLangToast && (
+        <Toast message={t('langToast')} onDismiss={handleDismissToast} />
+      )}
     </div>
   )
 }

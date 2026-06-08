@@ -29,6 +29,7 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
   const [showApproveModal, setShowApproveModal] = useState(false)
   const [evidenceFinding, setEvidenceFinding] = useState<Finding | null>(null)
   const [showEvidenceModal, setShowEvidenceModal] = useState(false)
+  const [manualMode, setManualMode] = useState(false)
 
   useEffect(() => {
     apiClient.getRadReport(params.id)
@@ -148,10 +149,10 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
             </Banner>
           </div>
         )}
-        {report.imageQuality === 'non_diagnostic' && (
+        {report.imageQuality === 'non_diagnostic' && !manualMode && (
           <div style={{ marginBottom: 16 }}>
             <Banner kind="crit" title={t('bNonDiagnostic')} action={
-              <Btn variant="secondary" size="sm" type="button">
+              <Btn variant="secondary" size="sm" type="button" onClick={() => setManualMode(true)}>
                 {t('continueNoAi')}
               </Btn>
             }>
@@ -188,7 +189,7 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
                 <ReportEditor
                   report={report}
                   onChange={(updated) => setReport(updated as RadiologicalReport)}
-                  readonly={isApproved}
+                  readonly={isApproved && !manualMode}
                   lang={lang}
                 />
               </div>

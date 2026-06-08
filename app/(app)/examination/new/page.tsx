@@ -33,6 +33,8 @@ export default function NewExaminationPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [manualMode, setManualMode] = useState(false)
+  const [rawTranscription, setRawTranscription] = useState<string | null>(null)
+  const [isProcessingReport, setIsProcessingReport] = useState(false)
 
   useEffect(() => {
     apiClient.getPatients().then(({ patients }) => setPatients(patients))
@@ -41,6 +43,19 @@ export default function NewExaminationPage() {
   const canGenImage = images.length > 0
   const canGenVoice = !!voiceBlob
   const canGenMulti = canGenImage && canGenVoice
+
+  const buildImageFormData = () => {
+    const formData = new FormData()
+    images.forEach((img) => formData.append('images', img))
+    formData.append('examinationType', examType!)
+    formData.append('clinicalIndication', indication)
+    formData.append('examinationContext', JSON.stringify(context))
+    formData.append('comments', comments)
+    formData.append('patientAge', String(patient!.age))
+    formData.append('patientGender', patient!.gender)
+    formData.append('language', lang)
+    return formData
+  }
 
   const handleGenerate = async () => {
     if (!patient || !examType) {
@@ -53,6 +68,8 @@ export default function NewExaminationPage() {
     }
     setError(null)
     setManualMode(false)
+    setRawTranscription(null)
+    setIsProcessingReport(false)
     setLoading(true)
     try {
       // Create draft report
@@ -65,29 +82,18 @@ export default function NewExaminationPage() {
         analysisMode: mode as AnalysisMode,
       })
 
-      // Invoke AI image analysis for image/multimodal modes
-      if (mode === 'image' || mode === 'multimodal') {
-        const formData = new FormData()
-        images.forEach((img) => formData.append('images', img))
-        formData.append('examinationType', examType)
-        formData.append('clinicalIndication', indication)
-        formData.append('examinationContext', JSON.stringify(context))
-        formData.append('patientAge', String(patient.age))
-        formData.append('patientGender', patient.gender)
-        formData.append('language', lang)
+      if (mode === 'image') {
+        // ── Image-only flow ──────────────────────────────────────────────────
+        const imageAnalysis = await apiClient.analyzeImage(buildImageFormData())
 
-        const imageAnalysis = await apiClient.analyzeImage(formData)
-
-        // Handle fallback — AI unavailable
         if ('fallback' in imageAnalysis && (imageAnalysis as unknown as { fallback: boolean; error: string }).fallback) {
-          const fallbackResult = imageAnalysis as unknown as { fallback: boolean; error: string }
-          setError(fallbackResult.error)
+          const fb = imageAnalysis as unknown as { fallback: boolean; error: string }
+          setError(fb.error)
           setManualMode(true)
           setLoading(false)
           return
         }
 
-        // Persist AI analysis results onto the draft report
         await apiClient.updateRadReport(report.id, {
           findings: imageAnalysis.findings,
           lowConfidenceFindings: imageAnalysis.lowConfidenceFindings,
@@ -100,12 +106,84 @@ export default function NewExaminationPage() {
           imageCount: images.length,
           aiGenerated: true,
         })
+
+      } else if (mode === 'voice') {
+        // ── Voice-only two-phase flow ────────────────────────────────────────
+        // Phase 1: transcribe → show raw transcription immediately
+        const { transcription } = await apiClient.transcribeAudio(voiceBlob!.blob, lang)
+        setRawTranscription(transcription)
+        setIsProcessingReport(true)
+        setLoading(false) // unblock UI — show raw preview
+
+        // Phase 2: generate report in background
+        try {
+          const draft = await apiClient.generateReport({
+            transcription,
+            role: 'radiologist',
+            examinationType: examType,
+            examinationContext: Object.keys(context).length > 0 ? context : undefined,
+            patientAge: patient.age,
+            patientGender: patient.gender as 'M' | 'F',
+            language: lang,
+          }) as Partial<import('@/lib/types').RadiologicalReport>
+          await apiClient.updateRadReport(report.id, {
+            ...draft,
+            aiGenerated: true,
+          })
+        } finally {
+          setIsProcessingReport(false)
+        }
+        router.push(`/examination/${report.id}`)
+        return
+
+      } else if (mode === 'multimodal') {
+        // ── Multimodal flow — parallel image+voice analysis ──────────────────
+        setIsProcessingReport(true)
+        setLoading(false)
+
+        const [imageResult, voiceResult] = await Promise.all([
+          apiClient.analyzeImage(buildImageFormData()),
+          apiClient.transcribeAudio(voiceBlob!.blob, lang).then(async ({ transcription }) => {
+            setRawTranscription(transcription)
+            const voiceDraft = await apiClient.generateReport({
+              transcription,
+              role: 'radiologist',
+              examinationType: examType,
+              examinationContext: Object.keys(context).length > 0 ? context : undefined,
+              patientAge: patient!.age,
+              patientGender: patient!.gender as 'M' | 'F',
+              language: lang,
+            }) as Partial<import('@/lib/types').RadiologicalReport>
+            return { transcription, findings: voiceDraft.findings ?? [] }
+          }),
+        ])
+
+        const fusionResult = await apiClient.fuseFindings({
+          findingsFromImages: imageResult.findings ?? [],
+          findingsFromSpeech: voiceResult.findings,
+        })
+
+        await apiClient.updateRadReport(report.id, {
+          findings: fusionResult.confirmedFindings,
+          fusionResult,
+          impression: imageResult.impression,
+          imagingLimitations: imageResult.imagingLimitations ?? undefined,
+          imageQuality: imageResult.imageQuality,
+          rawObservations: imageResult.rawObservations,
+          aiSuggestions: imageResult.aiSuggestions,
+          aiQualityCheck: imageResult.aiQualityCheck,
+          imageCount: images.length,
+          aiGenerated: true,
+        })
+
+        setIsProcessingReport(false)
       }
 
       router.push(`/examination/${report.id}`)
     } catch {
       setError(lang === 'en' ? 'Failed to create report.' : 'Nie udało się utworzyć raportu.')
       setLoading(false)
+      setIsProcessingReport(false)
     }
   }
 
@@ -266,13 +344,37 @@ export default function NewExaminationPage() {
             />
           </div>
 
+          {/* Raw transcription preview — shown immediately after Whisper returns */}
+          {rawTranscription !== null && (
+            <div>
+              <label className="field-label" style={{ color: 'var(--text-muted)' }}>
+                {isProcessingReport
+                  ? (lang === 'en' ? 'Whisper Transcription — processing with AI…' : 'Transkrypcja Whisper — przetwarzanie przez AI…')
+                  : (lang === 'en' ? 'Whisper Transcription' : 'Transkrypcja Whisper')}
+              </label>
+              <textarea
+                className="textarea"
+                readOnly
+                value={rawTranscription}
+                rows={4}
+                style={{ opacity: isProcessingReport ? 0.7 : 1, resize: 'none' }}
+              />
+              {isProcessingReport && (
+                <div className="row g8" style={{ marginTop: 8, color: 'var(--text-muted)', fontSize: 13 }}>
+                  <Icon name="loader" size={14} className="spin" aria-hidden />
+                  {lang === 'en' ? 'Claude is generating the report draft…' : 'Claude generuje szkic raportu…'}
+                </div>
+              )}
+            </div>
+          )}
+
           <Btn
             variant="primary"
             size="lg"
             icon="sparkle"
             onClick={handleGenerate}
-            loading={loading}
-            disabled={!patient || !examType}
+            loading={loading || isProcessingReport}
+            disabled={!patient || !examType || isProcessingReport}
             className="btn-block"
             type="button"
           >

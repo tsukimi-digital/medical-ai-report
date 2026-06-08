@@ -11,7 +11,7 @@ type ModalProps = {
 }
 
 export function Modal({ open, onClose, children, lg, title }: ModalProps) {
-  const firstFocusableRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
@@ -22,10 +22,12 @@ export function Modal({ open, onClose, children, lg, title }: ModalProps) {
     return () => document.removeEventListener('keydown', handleKey)
   }, [open, onClose])
 
-  // Focus trap
+  // Auto-focus first focusable element when modal opens
   useEffect(() => {
     if (!open) return
-    const el = firstFocusableRef.current
+    const el = dialogRef.current?.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    )
     el?.focus()
   }, [open])
 
@@ -40,6 +42,7 @@ export function Modal({ open, onClose, children, lg, title }: ModalProps) {
       aria-label={title}
     >
       <div
+        ref={dialogRef}
         className={`modal${lg ? ' modal-lg' : ''}`}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
