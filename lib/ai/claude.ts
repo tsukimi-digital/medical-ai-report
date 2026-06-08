@@ -232,7 +232,7 @@ async function analyzeImagesTwoStep(params: {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const extractionParams: any = {
-    model: 'claude-sonnet-4-6',
+    model: 'claude-opus-4-8',
     max_tokens: useThinking ? 10000 : 4000,
     system: systemBlocks,
     messages: [
@@ -268,7 +268,7 @@ Wyodrębnij surowe obserwacje z obrazów. Lista punktowana, technicznie, bez int
 
   // ---- Step 2: Report Generation ----
   const reportResponse = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-opus-4-8',
     max_tokens: 4000,
     temperature: 0,
     system: systemBlocks,
@@ -287,7 +287,7 @@ Wyodrębnij surowe obserwacje z obrazów. Lista punktowana, technicznie, bez int
   // Retry on parse failure
   if (!parsed) {
     const retryResponse = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-opus-4-8',
       max_tokens: 4000,
       temperature: 0,
       messages: [
@@ -347,7 +347,7 @@ async function analyzeImagesAdvanced(params: {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sirParams: any = {
-    model: 'claude-sonnet-4-6',
+    model: 'claude-opus-4-8',
     max_tokens: useThinking ? 10000 : 3000,
     system: advSystemBlocks,
     messages: [
@@ -380,7 +380,7 @@ Format: { "structures": { "struktura": { "visible": boolean, "description": stri
 
   // ---- Etap 2A: Anatomy Detection ----
   const anatomyResponse = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-opus-4-8',
     max_tokens: 2000,
     temperature: 0,
     messages: [{
@@ -397,7 +397,7 @@ JSON: { "identifiedStructures": string[], "missingStructures": string[] }`,
 
   // ---- Etap 2B: Abnormality Detection ----
   const abnormalityResponse = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-opus-4-8',
     max_tokens: 3000,
     temperature: 0,
     system: advSystemBlocks,
@@ -425,7 +425,7 @@ JSON: {
 
   // ---- Etap 2C: Report Generation (Prompt E) ----
   const reportResponse = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-opus-4-8',
     max_tokens: 4000,
     temperature: 0,
     system: advSystemBlocks,
@@ -451,7 +451,7 @@ Pola: findings[], lowConfidenceFindings[], impression, imagingLimitations, aiSug
 
   // ---- Etap 3: AI Reviewer ----
   const reviewResponse = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-opus-4-8',
     max_tokens: 2000,
     temperature: 0,
     messages: [{
@@ -540,7 +540,7 @@ async function generateRadiologyReport(params: {
   ].filter(l => l !== '').join('\n')
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-opus-4-8',
     max_tokens: 4000,
     temperature: 0,
     system: [cachedTextBlock(SYSTEM_LAYER1_GENERATE_REPORT_RADIOLOGIST), cachedTextBlock(examLayer2)],
@@ -575,7 +575,7 @@ async function generateMedicalReport(params: {
   ].filter(l => l !== '').join('\n')
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-opus-4-8',
     max_tokens: 3000,
     temperature: 0,
     system: [cachedTextBlock(SYSTEM_LAYER1_GENERATE_REPORT_DOCTOR)],
@@ -597,7 +597,7 @@ async function generateMedicalReport(params: {
 
   // Generate patient explanation in a second call
   const explanationResponse = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-opus-4-8',
     max_tokens: 2000,
     temperature: 0,
     messages: [{
@@ -671,7 +671,7 @@ export async function fuseFindings(params: {
   findingsFromSpeech: Finding[]
 }): Promise<FusionResult> {
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-opus-4-8',
     max_tokens: 3000,
     temperature: 0,
     messages: [{
@@ -728,7 +728,7 @@ export async function generatePatientExplanation(params: {
       }
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-opus-4-8',
     max_tokens: 2000,
     temperature: 0,
     messages: [{
