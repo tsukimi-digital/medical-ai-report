@@ -20,7 +20,7 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const report = store.getRadiologyReport(params.id)
+  const report = store.getRadiologicalReport(params.id)
   if (!report) {
     return NextResponse.json({ error: 'Report not found' }, { status: 404 })
   }
@@ -37,7 +37,7 @@ export async function PUT(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const report = store.getRadiologyReport(params.id)
+  const report = store.getRadiologicalReport(params.id)
   if (!report) {
     return NextResponse.json({ error: 'Report not found' }, { status: 404 })
   }
@@ -64,6 +64,6 @@ export async function PUT(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  const updated = store.updateRadiologyReport(params.id, parsed.data)
+  const updated = store.updateRadiologicalReport(params.id, parsed.data)
   return NextResponse.json({ report: updated })
 }

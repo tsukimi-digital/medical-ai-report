@@ -39,6 +39,6 @@ export async function PATCH(
     )
   }
 
-  const approved = store.approveMedicalReport(params.id, session.user.id)
+  const approved = store.approveMedicalReport(params.id)
   return NextResponse.json({ report: approved })
 }

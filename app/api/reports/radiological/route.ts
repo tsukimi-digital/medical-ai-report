@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const patientId = searchParams.get('patientId') ?? undefined
 
-  let reports = store.getAllRadiologyReports()
+  let reports = store.getAllRadiologicalReports()
 
   // Radiologists see only their own reports
   if (session.user.role === 'radiologist') {
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const report = store.createRadiologyReport({
+  const report = store.createRadiologicalReport({
     ...parsed.data,
     radiologistId: session.user.id,
   })
