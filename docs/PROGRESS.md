@@ -68,8 +68,10 @@
 - [x] Testy jednostkowe BE2
 
 ## Faza 5 — QA (Mei Nakamura) — po merge FE+BE1+BE2
-- [ ] tests/e2e/login.spec.ts
-- [ ] tests/e2e/case-a.spec.ts (USG tarczycy, image→TI-RADS 4)
-- [ ] tests/e2e/case-b.spec.ts (USG jamy brzusznej, voice→korekta)
-- [ ] tests/e2e/case-c.spec.ts (lekarz: głos→notatka+wyjaśnienie)
-- [ ] tests/e2e/case-d.spec.ts (suboptimal banner + Wymaga weryfikacji)
+- [x] tests/e2e/login.spec.ts
+- [x] tests/e2e/case-a.spec.ts (USG tarczycy, image→TI-RADS 4)
+- [x] tests/e2e/case-b.spec.ts (USG jamy brzusznej, voice→korekta)
+- [x] tests/e2e/case-c.spec.ts (lekarz: głos→notatka+wyjaśnienie)
+- [x] tests/e2e/case-d.spec.ts (suboptimal banner + Wymaga weryfikacji)
+- [x] tests/e2e/dashboard.spec.ts (radiolog + lekarz dashboard)
+- [x] tests/e2e/navigation.spec.ts (navbar, disclaimer, lang toggle, logout, keyboard)
