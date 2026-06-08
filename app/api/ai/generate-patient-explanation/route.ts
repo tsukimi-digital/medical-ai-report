@@ -1,30 +1,14 @@
 export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getIronSession } from 'iron-session'
-import { cookies } from 'next/headers'
+import { getSession } from '@/lib/auth'
 import { generatePatientExplanation } from '@/lib/ai/claude'
 import { store } from '@/lib/store'
 
-interface SessionData {
-  userId?: string
-  role?: string
-}
-
-const SESSION_OPTIONS = {
-  cookieName: 'sonara_session',
-  password: process.env.AUTH_SECRET ?? 'dev-secret-minimum-32-chars-long-ok',
-  cookieOptions: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
-  },
-}
-
 export async function POST(request: NextRequest) {
   // Auth check
-  const session = await getIronSession<SessionData>(await cookies(), SESSION_OPTIONS)
-  if (!session.userId) {
+  const session = await getSession()
+  if (!session.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -61,22 +45,39 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Report not found' }, { status: 404 })
   }
 
-  try {
-    const explanation = await generatePatientExplanation({
-      report,
-      transcription: transcription ?? undefined,
-    })
+  // Invoke Claude with 1 retry + 45s timeout
+  let attempt = 0
+  while (attempt < 2) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 45_000)
 
-    // Save explanation back to the report in store
-    if (reportType === 'radiological') {
-      store.updateRadiologicalReport(reportId, { patientExplanation: explanation })
-    } else {
-      store.updateMedicalReport(reportId, { patientExplanation: explanation })
+      const explanation = await generatePatientExplanation({
+        report,
+        transcription: transcription ?? undefined,
+      })
+
+      clearTimeout(timeoutId)
+
+      // Save explanation back to the report in store
+      if (reportType === 'radiological') {
+        store.updateRadiologicalReport(reportId, { patientExplanation: explanation })
+      } else {
+        store.updateMedicalReport(reportId, { patientExplanation: explanation })
+      }
+
+      return NextResponse.json(explanation)
+    } catch (err: unknown) {
+      attempt++
+      const isAbort = err instanceof Error && err.name === 'AbortError'
+      if (attempt >= 2 || isAbort) {
+        return NextResponse.json(
+          { error: 'Usługa chwilowo niedostępna. Spróbuj ponownie.' },
+          { status: 503 }
+        )
+      }
     }
-
-    return NextResponse.json(explanation)
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Claude API error'
-    return NextResponse.json({ error: message }, { status: 500 })
   }
+
+  return NextResponse.json({ error: 'Internal error' }, { status: 500 })
 }
