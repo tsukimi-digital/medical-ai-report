@@ -1,4 +1,8 @@
-// BE1: implement POST /api/auth/logout — clear session cookie
+import { NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth'
+
 export async function POST() {
-  return Response.json({ error: 'not implemented' }, { status: 501 })
+  const session = await getSession()
+  await session.destroy()
+  return NextResponse.json({ ok: true })
 }

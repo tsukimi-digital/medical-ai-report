@@ -5,6 +5,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    env: {
+      AUTH_SECRET: 'test-secret-for-unit-tests-only-32chars!',
+    },
   },
   resolve: {
     alias: {
