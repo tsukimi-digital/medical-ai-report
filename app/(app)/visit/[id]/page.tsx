@@ -28,6 +28,8 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
   const [approving, setApproving] = useState(false)
   const [showApproveModal, setShowApproveModal] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
+  const [rawTranscription, setRawTranscription] = useState<string | null>(null)
+  const [isProcessingReport, setIsProcessingReport] = useState(false)
 
   useEffect(() => {
     if (isNew) return
@@ -41,28 +43,44 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
       .finally(() => setLoading(false))
   }, [params.id, lang, isNew])
 
-  const handleVoiceRecording = async (blob: Blob, mimeType: string) => {
+  const handleVoiceRecording = async (blob: Blob, _mimeType: string) => {
     setTranscribing(true)
+    setRawTranscription(null)
+    setIsProcessingReport(false)
     try {
-      const { transcription } = await apiClient.transcribe(blob, lang)
+      // Phase 1: transcribe immediately
+      const { transcription } = await apiClient.transcribeAudio(blob, lang)
+      setRawTranscription(transcription)
+      setTranscribing(false)
+      setIsProcessingReport(true)
+
       if (!report) {
-        // Create report from transcription — use session user's first available patient as default
-        const sessionUser = apiClient.getSessionUser()
+        // New visit — create the report shell first, then generate in parallel
         const { patients } = await apiClient.getPatients()
         const defaultPatient = patients[0]
-
-        const draft = await apiClient.generateReport({
-          transcription,
-          role: 'doctor',
-          patientAge: defaultPatient?.age ?? 0,
-          patientGender: (defaultPatient?.gender ?? 'F') as 'M' | 'F',
-          language: lang,
-        })
 
         const { report: created } = await apiClient.createMedReport({
           patientId: defaultPatient?.id ?? 'p-anna',
           transcription,
         })
+
+        // Phase 2: generate medical report AND patient explanation simultaneously
+        const [draft] = await Promise.all([
+          apiClient.generateReport({
+            transcription,
+            role: 'doctor',
+            patientAge: defaultPatient?.age ?? 0,
+            patientGender: (defaultPatient?.gender ?? 'F') as 'M' | 'F',
+            language: lang,
+          }),
+          // Patient explanation generated concurrently (result applied below when draft arrives)
+          apiClient.generatePatientExplanation({
+            reportId: created.id,
+            reportType: 'medical',
+            transcription,
+          }).catch(() => null), // non-fatal
+        ])
+
         const { report: updated } = await apiClient.updateMedReport(created.id, {
           ...(draft as Partial<MedicalReport>),
           transcription,
@@ -71,12 +89,37 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
         if (defaultPatient) setPatient(defaultPatient)
         router.push(`/visit/${updated.id}`)
       } else {
-        setReport((r) => r ? { ...r, transcription } : r)
+        // Existing visit — generate against known report
+        const [draft, explanation] = await Promise.all([
+          apiClient.generateReport({
+            transcription,
+            role: 'doctor',
+            patientAge: patient?.age ?? 0,
+            patientGender: (patient?.gender ?? 'F') as 'M' | 'F',
+            language: lang,
+            radiologicalReportId: report.radiologicalReportId ?? undefined,
+          }),
+          // Patient explanation generated simultaneously
+          apiClient.generatePatientExplanation({
+            reportId: report.id,
+            reportType: 'medical',
+            transcription,
+          }).catch(() => null),
+        ])
+
+        const { report: updated } = await apiClient.updateMedReport(report.id, {
+          ...(draft as Partial<MedicalReport>),
+          transcription,
+          ...(explanation ? { patientExplanation: explanation } : {}),
+        })
+        setReport(updated)
+        setRawTranscription(null) // clear preview — editor now has the draft
       }
     } catch {
       setError(lang === 'en' ? 'Transcription failed.' : 'Transkrypcja nie powiodła się.')
     } finally {
       setTranscribing(false)
+      setIsProcessingReport(false)
     }
   }
 
@@ -129,12 +172,26 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
 
         <div className="row between wrap g16" style={{ marginBottom: 20 }}>
           <div>
-            <h1 className="h-page">{t('visitTitle')}</h1>
-            {report?.caseKey && (
-              <span className="badge badge-accent badge-sq mono" style={{ fontWeight: 700, marginTop: 4, display: 'inline-block' }}>
-                CASE {report.caseKey}
-              </span>
-            )}
+            <div className="row g10" style={{ marginBottom: 4 }}>
+              <h1 className="h-page">{t('visitTitle')}</h1>
+              {report?.caseKey && (
+                <span className="badge badge-accent badge-sq mono" style={{ fontWeight: 700 }}>
+                  CASE {report.caseKey}
+                </span>
+              )}
+              {isApproved && (
+                <span className="badge badge-approved">
+                  <span className="dot" aria-hidden />
+                  {t('statusApproved')}
+                </span>
+              )}
+              {!isApproved && report?.aiGenerated && (
+                <span className="badge badge-ai">
+                  <Icon name="sparkle" size={11} aria-hidden />
+                  {t('aiDraftBadge')}
+                </span>
+              )}
+            </div>
           </div>
           {!isApproved && report && (
             <Btn
@@ -150,6 +207,18 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
             </Btn>
           )}
         </div>
+
+        {/* Transcription quality banners */}
+        {report?.transcriptionQuality === 'partial' && !isApproved && (
+          <div style={{ marginBottom: 16 }}>
+            <Banner kind="warn">{t('bTranscPartial')} — {lang === 'en' ? 'check the recording before approving.' : 'sprawdź nagranie przed zatwierdzeniem.'}</Banner>
+          </div>
+        )}
+        {report?.transcriptionQuality === 'poor' && !isApproved && (
+          <div style={{ marginBottom: 16 }}>
+            <Banner kind="crit">{t('bTranscPoor')} — {lang === 'en' ? 'verification required.' : 'weryfikacja wymagana.'}</Banner>
+          </div>
+        )}
 
         {isApproved && (
           <div style={{ marginBottom: 16 }}>
@@ -168,6 +237,27 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
               <div className="row g10">
                 <Icon name="loader" size={18} className="spin" aria-hidden />
                 <span className="muted">{t('transcribing')}</span>
+              </div>
+            ) : isProcessingReport ? (
+              <div className="col g10">
+                {rawTranscription !== null && (
+                  <div>
+                    <label className="field-label" style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                      {lang === 'en' ? 'Whisper Transcription — processing with AI…' : 'Transkrypcja Whisper — przetwarzanie przez AI…'}
+                    </label>
+                    <textarea
+                      className="textarea"
+                      readOnly
+                      value={rawTranscription}
+                      rows={3}
+                      style={{ opacity: 0.7, resize: 'none', fontSize: 13 }}
+                    />
+                  </div>
+                )}
+                <div className="row g8" style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+                  <Icon name="loader" size={14} className="spin" aria-hidden />
+                  {lang === 'en' ? 'Claude is generating the report draft…' : 'Claude generuje szkic raportu…'}
+                </div>
               </div>
             ) : (
               <VoiceRecorder onRecording={handleVoiceRecording} labelRecord={t('recordVisit')} labelStop={t('stopRec')} />
