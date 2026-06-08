@@ -1,4 +1,10 @@
-// BE1: implement GET /api/auth/me — return current user from session or 401
+import { NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth'
+
 export async function GET() {
-  return Response.json({ error: 'not implemented' }, { status: 501 })
+  const session = await getSession()
+  if (!session.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  return NextResponse.json({ user: session.user })
 }

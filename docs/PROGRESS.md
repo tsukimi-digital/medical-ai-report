@@ -39,20 +39,20 @@
 - [ ] Testy jednostkowe FE
 
 ## Faza 2a — Auth + dane (BE1: Kenji Mori)
-- [ ] middleware.ts
-- [ ] lib/auth.ts
-- [ ] app/api/auth/login/route.ts
-- [ ] app/api/auth/logout/route.ts
-- [ ] app/api/auth/me/route.ts
-- [ ] app/api/patients/route.ts
-- [ ] app/api/patients/[id]/route.ts
-- [ ] app/api/reports/radiological/route.ts
-- [ ] app/api/reports/radiological/[id]/route.ts
-- [ ] app/api/reports/radiological/[id]/approve/route.ts
-- [ ] app/api/reports/medical/route.ts
-- [ ] app/api/reports/medical/[id]/route.ts
-- [ ] app/api/reports/medical/[id]/approve/route.ts
-- [ ] Testy jednostkowe BE1
+- [x] middleware.ts
+- [x] lib/auth.ts
+- [x] app/api/auth/login/route.ts
+- [x] app/api/auth/logout/route.ts
+- [x] app/api/auth/me/route.ts
+- [x] app/api/patients/route.ts
+- [x] app/api/patients/[id]/route.ts
+- [x] app/api/reports/radiological/route.ts
+- [x] app/api/reports/radiological/[id]/route.ts
+- [x] app/api/reports/radiological/[id]/approve/route.ts
+- [x] app/api/reports/medical/route.ts
+- [x] app/api/reports/medical/[id]/route.ts
+- [x] app/api/reports/medical/[id]/approve/route.ts
+- [x] Testy jednostkowe BE1
 
 ## Faza 2b — AI + store (BE2: Akira Yamamoto)
 - [x] lib/store.ts
