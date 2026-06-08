@@ -19,11 +19,20 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const u = apiClient.getSessionUser()
-    if (!u) {
-      router.replace('/login')
-    } else {
+    if (u) {
       setUser(u)
+      return
     }
+    // In-memory sessionUser is not set (e.g. hard refresh) — re-hydrate from server cookie
+    apiClient.me()
+      .then(({ user: serverUser }) => {
+        apiClient.setSessionUser(serverUser)
+        setUser(serverUser)
+      })
+      .catch(() => {
+        // No valid session cookie either — go to login
+        router.replace('/login')
+      })
   }, [router])
 
   // Show toast whenever lang changes (except on first render)
