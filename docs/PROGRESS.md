@@ -67,7 +67,36 @@
 - [x] app/api/ai/generate-patient-explanation/route.ts
 - [x] Testy jednostkowe BE2
 
-## Faza 5 — QA (Mei Nakamura) — po merge FE+BE1+BE2
+## Faza 3 — Integracja (FE: Yuki Sato + BE2: Akira Yamamoto) — blokuje Fazę 5
+
+**Gate przed spawnem QA:** `grep -r "fetch(" lib/api-client.ts` musi zwrócić wyniki.
+
+### BE2 (Akira Yamamoto) — feature/faza3-be2-fixes
+- [x] Fix Bug #1: session.userId → session.user we wszystkich 5 AI routes
+- [x] Import SESSION_OPTIONS z lib/auth.ts (usunąć duplikaty z AI routes)
+- [x] Fix limit pliku serwer → 5MB spójne z klientem + dodać MIME type validation
+- [x] Dodać retry/timeout 45s do generate-report, fuse-findings, generate-patient-explanation
+- [x] Fix rad3: store.ts — zsynchronizować imię z auth.ts (Katarzyna Wróbel)
+
+### FE (Yuki Sato) — feature/faza3-integration
+- [ ] lib/api-client.ts: podmienić mock na realne fetch('/api/...')
+- [ ] examination/new: dwufazowy voice flow (Whisper→preview, Claude w tle→draft)
+- [ ] examination/new: multimodal flow (analyzeImage + transcribe równolegle → fuseFindings)
+- [ ] examination/new: "Analizuj wielomodalnie" aktywny tylko gdy obrazy + nagranie
+- [ ] visit/[id]: dwufazowy voice flow (identyczny jak examination)
+- [ ] visit/[id]: generowanie patientExplanation równolegle z raportem lekarskim
+
+## Faza 4 — Hardening (FE: Yuki Sato + BE2: Akira Yamamoto)
+
+### FE (Yuki Sato) — feature/faza3-integration (ta sama gałąź co Faza 3)
+- [ ] "Kontynuuj bez AI" button — dodać onClick handler (manualMode = true)
+- [ ] visit/[id]: bannery jakości transkrypcji (partial→żółty, poor→czerwony)
+- [ ] visit/[id]: badge proweniencji AI (analogicznie do examination/[id])
+- [ ] components/ui/modal.tsx: auto-focus na pierwszy element przy otwarciu
+- [ ] Toast: zmiana języka po wygenerowaniu draftu (klucz langToast)
+- [ ] lib/examination-types.ts: osobny plik per spec (re-export z lib/types.ts)
+
+## Faza 5 — QA (Mei Nakamura) — po merge Fazy 3 i 4
 - [x] tests/e2e/login.spec.ts
 - [x] tests/e2e/case-a.spec.ts (USG tarczycy, image→TI-RADS 4)
 - [x] tests/e2e/case-b.spec.ts (USG jamy brzusznej, voice→korekta)
