@@ -79,22 +79,22 @@
 - [x] Fix rad3: store.ts — zsynchronizować imię z auth.ts (Katarzyna Wróbel)
 
 ### FE (Yuki Sato) — feature/faza3-integration
-- [ ] lib/api-client.ts: podmienić mock na realne fetch('/api/...')
-- [ ] examination/new: dwufazowy voice flow (Whisper→preview, Claude w tle→draft)
-- [ ] examination/new: multimodal flow (analyzeImage + transcribe równolegle → fuseFindings)
-- [ ] examination/new: "Analizuj wielomodalnie" aktywny tylko gdy obrazy + nagranie
-- [ ] visit/[id]: dwufazowy voice flow (identyczny jak examination)
-- [ ] visit/[id]: generowanie patientExplanation równolegle z raportem lekarskim
+- [x] lib/api-client.ts: podmienić mock na realne fetch('/api/...')
+- [x] examination/new: dwufazowy voice flow (Whisper→preview, Claude w tle→draft)
+- [x] examination/new: multimodal flow (analyzeImage + transcribe równolegle → fuseFindings)
+- [x] examination/new: "Analizuj wielomodalnie" aktywny tylko gdy obrazy + nagranie
+- [x] visit/[id]: dwufazowy voice flow (identyczny jak examination)
+- [x] visit/[id]: generowanie patientExplanation równolegle z raportem lekarskim
 
 ## Faza 4 — Hardening (FE: Yuki Sato + BE2: Akira Yamamoto)
 
 ### FE (Yuki Sato) — feature/faza3-integration (ta sama gałąź co Faza 3)
-- [ ] "Kontynuuj bez AI" button — dodać onClick handler (manualMode = true)
-- [ ] visit/[id]: bannery jakości transkrypcji (partial→żółty, poor→czerwony)
-- [ ] visit/[id]: badge proweniencji AI (analogicznie do examination/[id])
-- [ ] components/ui/modal.tsx: auto-focus na pierwszy element przy otwarciu
-- [ ] Toast: zmiana języka po wygenerowaniu draftu (klucz langToast)
-- [ ] lib/examination-types.ts: osobny plik per spec (re-export z lib/types.ts)
+- [x] "Kontynuuj bez AI" button — dodać onClick handler (manualMode = true)
+- [x] visit/[id]: bannery jakości transkrypcji (partial→żółty, poor→czerwony)
+- [x] visit/[id]: badge proweniencji AI (analogicznie do examination/[id])
+- [x] components/ui/modal.tsx: auto-focus na pierwszy element przy otwarciu
+- [x] Toast: zmiana języka po wygenerowaniu draftu (klucz langToast)
+- [x] lib/examination-types.ts: osobny plik per spec (re-export z lib/types.ts)
 
 ## Faza 5 — QA (Mei Nakamura) — po merge Fazy 3 i 4
 - [x] tests/e2e/login.spec.ts
