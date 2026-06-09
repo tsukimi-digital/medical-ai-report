@@ -317,7 +317,7 @@ Analyzes USG images using Claude Vision pipeline. Supports two-step (AI_PIPELINE
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `images` | File (1–5) | yes | Binary image files, max 5 MB each (server pre-processes with sharp to max 1568px) |
+| `images` | File (1–5) | yes | Binary image files, max 10 MB each (server pre-processes with sharp to max 1568px) |
 | `examinationType` | string | yes | From `EXAM_TYPE_LIST` or free-text |
 | `clinicalIndication` | string | no | From referral |
 | `examinationContext` | JSON string | no | `ExaminationContext` serialized |

@@ -186,8 +186,6 @@ export const pl = {
   recSend: 'Wyślij do transkrypcji',
   recReset: 'Nagraj ponownie',
   priorSurgery: 'Przebyte zabiegi',
-  langToast:
-    'Wygenerowany raport jest w języku PL. Zmiana języka interfejsu nie wpływa na treść raportu.',
   patientAge: 'lat',
   female: 'kobieta',
   male: 'mężczyzna',
