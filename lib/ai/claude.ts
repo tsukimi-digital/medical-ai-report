@@ -397,7 +397,36 @@ JSON: { "identifiedStructures": string[], "missingStructures": string[] }`,
   const anatomyText = getTextContent(anatomyResponse.content)
   const anatomy = parseJSON<{ identifiedStructures: string[]; missingStructures: string[] }>(anatomyText)
 
-  // ---- Etap 2B: Abnormality Detection ----
+  // ---- Etap 2B: Observation Extraction — extract all observable features per structure ----
+  const obsParams = {
+    model: 'claude-opus-4-8' as const,
+    max_tokens: 4000,
+    temperature: 0 as const,
+    system: advSystemBlocks,
+    messages: [
+      {
+        role: 'user' as const,
+        content: `Based on the ultrasound images and this anatomy context:
+${JSON.stringify(anatomy)}
+
+Extract ALL observable features for each identified structure:
+- Echogenicity (normal/hypo/hyper/iso/anechoic)
+- Size in mm (if measurable)
+- Margins (sharp/irregular/lobulated)
+- Internal structure (homogeneous/heterogeneous/cystic/solid)
+- Vascularity if Doppler visible
+- Any calcifications, nodules, or focal lesions
+
+Return JSON: { "observations": { "<structure>": { "echogenicity": string, "size_mm": number|null, "margins": string, "texture": string, "vascularity": string|null, "focal_lesions": string|null } } }`,
+      }
+    ]
+  }
+  const obsResponse = await client.messages.create(obsParams) as Anthropic.Message
+  const obsText = obsResponse.content.find(b => b.type === 'text')?.text ?? '{}'
+  let observations: Record<string, unknown> = {}
+  try { observations = JSON.parse(obsText.match(/\{[\s\S]*\}/)?.[0] ?? '{}') } catch { observations = {} }
+
+  // ---- Etap 2C: Abnormality Detection ----
   const abnormalityResponse = await client.messages.create({
     model: 'claude-opus-4-8',
     max_tokens: 3000,
@@ -408,6 +437,7 @@ JSON: { "identifiedStructures": string[], "missingStructures": string[] }`,
       content: `Na podstawie SIR i zidentyfikowanych struktur, wykryj odchylenia od normy.
 SIR: ${JSON.stringify(sirData)}
 Zidentyfikowane struktury: ${JSON.stringify(anatomy)}
+Obserwacje: ${JSON.stringify(observations)}
 
 JSON: {
   "normalFindings": [{ "text": string, "anatomicalLocation": string, "evidence": { "imageIndexes": number[] } }],
@@ -425,7 +455,40 @@ JSON: {
     qualityIssues: string[]
   }>(abnormalityText)
 
-  // ---- Etap 2C: Report Generation (Prompt E) ----
+  // ---- Etap 2D: Classification — formal classification systems (TI-RADS, BI-RADS, etc.) ----
+  const classParams = {
+    model: 'claude-opus-4-8' as const,
+    max_tokens: 2000,
+    temperature: 0 as const,
+    system: advSystemBlocks,
+    messages: [
+      {
+        role: 'user' as const,
+        content: `Based on the findings:
+Anatomy: ${JSON.stringify(anatomy)}
+Abnormalities: ${JSON.stringify(abnormality)}
+
+Apply relevant formal classification systems for this examination type (${params.examinationType}):
+- TI-RADS for thyroid nodules (if applicable)
+- BI-RADS for breast (if applicable)
+- Bosniak for renal cysts (if applicable)
+- O-RADS for ovarian (if applicable)
+- NASCET for carotid stenosis (if applicable)
+- SFU for hydronephrosis (if applicable)
+
+Return JSON: { "classifications": [{ "system": string, "value": string, "label": string, "score": number|null, "criteria": string[] }], "primaryClassification": string|null }`,
+      }
+    ]
+  }
+  const classResponse = await client.messages.create(classParams) as Anthropic.Message
+  const classText = classResponse.content.find(b => b.type === 'text')?.text ?? '{}'
+  let classifications: { classifications: Array<{system: string, value: string, label: string, score: number|null, criteria: string[]}>, primaryClassification: string|null } = { classifications: [], primaryClassification: null }
+  try {
+    const parsed = JSON.parse(classText.match(/\{[\s\S]*\}/)?.[0] ?? '{}')
+    classifications = parsed
+  } catch { /* use default */ }
+
+  // ---- Etap 2E: Report Generation ----
   const reportResponse = await client.messages.create({
     model: 'claude-opus-4-8',
     max_tokens: 4000,
@@ -441,6 +504,8 @@ Język: ${params.language}
 
 Znaleziska normalne: ${JSON.stringify(abnormality?.normalFindings ?? [])}
 Znaleziska patologiczne: ${JSON.stringify(abnormality?.abnormalFindings ?? [])}
+Obserwacje strukturalne: ${JSON.stringify(observations)}
+Klasyfikacje formalne: ${JSON.stringify(classifications)}
 Struktury niewidoczne: ${JSON.stringify(anatomy?.missingStructures ?? [])}
 
 Zwróć JSON zgodny ze schematem ImageAnalysisResult (findings, lowConfidenceFindings, impression, imagingLimitations, aiSuggestions).
@@ -449,7 +514,7 @@ Pola: findings[], lowConfidenceFindings[], impression, imagingLimitations, aiSug
   })
 
   const reportText = getTextContent(reportResponse.content)
-  const baseResult = parseJSON<Partial<ImageAnalysisResult>>(reportText) ?? {}
+  let reportResult = parseJSON<Partial<ImageAnalysisResult>>(reportText) ?? {}
 
   // ---- Etap 3: AI Reviewer ----
   const reviewResponse = await client.messages.create({
@@ -466,13 +531,15 @@ Sprawdź:
 4. Hallucinations — czy raport nie zawiera struktur/wymiarów niewidocznych na obrazach?
 
 Typ badania: ${params.examinationType}
-Draft: ${JSON.stringify(baseResult, null, 2)}
+Draft: ${JSON.stringify(reportResult, null, 2)}
 
 Odpowiedz JSON:
 {
+  "approved": boolean,
   "status": "ready" | "needs_attention" | "blocked",
   "summary": string,
   "checks": [{ "category": "image_quality"|"completeness"|"consistency"|"classification"|"source_evidence", "status": "pass"|"warning"|"fail", "message": string }],
+  "corrections": string[],
   "autoCorrections": string[],
   "unresolvedItems": string[]
 }`,
@@ -480,18 +547,69 @@ Odpowiedz JSON:
   })
 
   const reviewText = getTextContent(reviewResponse.content)
-  const aiQualityCheck = parseJSON<AiQualityCheck>(reviewText)
+  const reviewResult = parseJSON<{
+    approved?: boolean
+    status: string
+    summary: string
+    checks: AiQualityCheck['checks']
+    corrections?: string[]
+    autoCorrections: string[]
+    unresolvedItems: string[]
+  }>(reviewText) ?? { approved: true, status: 'ready', summary: '', checks: [], corrections: [], autoCorrections: [], unresolvedItems: [] }
+
+  const approved = reviewResult.approved ?? true
+
+  // ---- Etap 3b: Apply corrections when reviewer did not approve ----
+  if (!approved && (reviewResult.corrections?.length ?? 0) > 0) {
+    const correctionParams = {
+      model: 'claude-opus-4-8' as const,
+      max_tokens: useThinking ? 10000 : 4000,
+      ...(useThinking ? { thinking: { type: 'enabled' as const, budget_tokens: 8000 } } : { temperature: 0 as const }),
+      system: advSystemBlocks,
+      messages: [
+        {
+          role: 'user' as const,
+          content: `The AI Quality Reviewer identified the following issues with this draft report:
+${(reviewResult.corrections ?? []).map((c: string, i: number) => `${i+1}. ${c}`).join('\n')}
+
+Original report:
+${JSON.stringify(reportResult)}
+
+Please produce a corrected version of the report addressing ALL identified issues.
+Return the same JSON structure as the original report.`,
+        }
+      ]
+    } as Parameters<typeof client.messages.create>[0]
+
+    try {
+      const correctionResponse = await client.messages.create(correctionParams) as Anthropic.Message
+      const correctionText = correctionResponse.content.find(b => b.type === 'text')?.text ?? ''
+      const corrected = parseJSON<Partial<ImageAnalysisResult>>(correctionText)
+      if (corrected?.findings) {
+        // Merge corrections into reportResult
+        reportResult = { ...reportResult, ...corrected }
+      }
+    } catch { /* keep original if correction fails */ }
+  }
+
+  const aiQualityCheck: AiQualityCheck = {
+    status: reviewResult.status as AiQualityCheck['status'] ?? 'ready',
+    summary: reviewResult.summary ?? '',
+    checks: reviewResult.checks ?? [],
+    autoCorrections: reviewResult.corrections ?? reviewResult.autoCorrections ?? [],
+    unresolvedItems: reviewResult.unresolvedItems ?? [],
+  }
 
   return {
-    imageQuality: abnormality?.imageQuality ?? baseResult.imageQuality ?? 'suboptimal',
-    qualityIssues: abnormality?.qualityIssues ?? baseResult.qualityIssues ?? [],
-    findings: baseResult.findings ?? [],
-    lowConfidenceFindings: baseResult.lowConfidenceFindings ?? [],
-    structuredFindings: sirData,
-    impression: baseResult.impression,
-    imagingLimitations: baseResult.imagingLimitations,
-    aiSuggestions: baseResult.aiSuggestions,
-    aiQualityCheck: aiQualityCheck ?? undefined,
+    imageQuality: abnormality?.imageQuality ?? reportResult.imageQuality ?? 'suboptimal',
+    qualityIssues: abnormality?.qualityIssues ?? reportResult.qualityIssues ?? [],
+    findings: reportResult.findings ?? [],
+    lowConfidenceFindings: reportResult.lowConfidenceFindings ?? [],
+    structuredFindings: { ...sirData, observations, classifications },
+    impression: reportResult.impression,
+    imagingLimitations: reportResult.imagingLimitations,
+    aiSuggestions: reportResult.aiSuggestions,
+    aiQualityCheck,
   }
 }
 
