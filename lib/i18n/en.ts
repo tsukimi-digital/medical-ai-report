@@ -181,6 +181,9 @@ export const en = {
   bTranscPartial: 'Partial transcription',
   bTranscPoor: 'Poor transcription quality',
   continueNoAi: 'Continue without AI',
+  recReady: 'Recording ready',
+  recSend: 'Send for transcription',
+  recReset: 'Record again',
   langToast:
     'The generated report is in PL. Changing the interface language does not affect report content.',
   patientAge: 'y/o',

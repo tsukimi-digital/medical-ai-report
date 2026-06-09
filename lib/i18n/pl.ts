@@ -182,6 +182,9 @@ export const pl = {
   bTranscPartial: 'Transkrypcja częściowa',
   bTranscPoor: 'Transkrypcja słabej jakości',
   continueNoAi: 'Kontynuuj bez AI',
+  recReady: 'Nagranie gotowe',
+  recSend: 'Wyślij do transkrypcji',
+  recReset: 'Nagraj ponownie',
   langToast:
     'Wygenerowany raport jest w języku PL. Zmiana języka interfejsu nie wpływa na treść raportu.',
   patientAge: 'lat',
