@@ -362,10 +362,11 @@ function validatePeselChecksum(pesel: string): boolean {
 
 describe('PESEL checksum validation', () => {
   it('accepts valid PESELs with correct checksum', () => {
-    expect(validatePeselChecksum('74050512388')).toBe(true)
-    expect(validatePeselChecksum('65021034177')).toBe(true)
-    expect(validatePeselChecksum('81071245699')).toBe(true)
-    expect(validatePeselChecksum('90031567422')).toBe(true)
+    // These PESELs have correct checksums (last digit computed from weights [1,3,7,9,1,3,7,9,1,3])
+    expect(validatePeselChecksum('74050512389')).toBe(true)  // 7405051238 → check=9
+    expect(validatePeselChecksum('65021034171')).toBe(true)  // 6502103417 → check=1
+    expect(validatePeselChecksum('81071245693')).toBe(true)  // 8107124569 → check=3
+    expect(validatePeselChecksum('90031567423')).toBe(true)  // 9003156742 → check=3
   })
 
   it('rejects strings shorter than 11 digits', () => {

@@ -211,6 +211,8 @@ async function analyzeImagesTwoStep(params: {
   language: 'pl' | 'en'
   imageQualityHint?: 'diagnostic' | 'suboptimal' | 'non_diagnostic'
 }): Promise<ImageAnalysisResult> {
+  // non_diagnostic is intentionally excluded: when the image is unreadable,
+  // the user is routed to manual entry mode — extended thinking would waste budget with no benefit.
   const useThinking = params.images.length >= 3 || params.imageQualityHint === 'suboptimal'
   const imageCount = params.images.length
 
@@ -329,6 +331,8 @@ async function analyzeImagesAdvanced(params: {
   language: 'pl' | 'en'
   imageQualityHint?: 'diagnostic' | 'suboptimal' | 'non_diagnostic'
 }): Promise<ImageAnalysisResult> {
+  // non_diagnostic is intentionally excluded: when the image is unreadable,
+  // the user is routed to manual entry mode — extended thinking would waste budget with no benefit.
   const useThinking = params.images.length >= 3 || params.imageQualityHint === 'suboptimal'
   const examLayer2 = buildAnalyzeImageSystemPrompt(params.examinationType, params.patientGender)
 
@@ -385,6 +389,7 @@ Format: { "structures": { "struktura": { "visible": boolean, "description": stri
     model: 'claude-opus-4-8',
     max_tokens: 2000,
     temperature: 0,
+    system: advSystemBlocks,
     messages: [{
       role: 'user',
       content: `Na podstawie SIR, zidentyfikuj wszystkie widoczne struktury anatomiczne.
@@ -393,7 +398,7 @@ Typ badania: ${params.examinationType}
 
 JSON: { "identifiedStructures": string[], "missingStructures": string[] }`,
     }],
-  })
+  } as Parameters<typeof client.messages.create>[0]) as Anthropic.Message
   const anatomyText = getTextContent(anatomyResponse.content)
   const anatomy = parseJSON<{ identifiedStructures: string[]; missingStructures: string[] }>(anatomyText)
 

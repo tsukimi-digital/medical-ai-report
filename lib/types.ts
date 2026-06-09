@@ -258,7 +258,16 @@ export type PatientExplanation = {
 // ---------------------------------------------------------------------------
 
 /** Internal AI intermediate representation — not exposed in UI */
-export type StructuredFindings = Record<string, unknown>
+export type StructuredFindings = {
+  /** Raw per-structure observations from advanced pipeline stage 2B */
+  observations?: Record<string, unknown>
+  /** Formal classification results from advanced pipeline stage 2D */
+  classifications?: {
+    classifications?: Array<{ system: string; value: string; label: string; score: number | null; criteria: string[] }>
+    primaryClassification?: string | null
+  }
+  [key: string]: unknown
+}
 
 // ---------------------------------------------------------------------------
 // Radiological Report
