@@ -209,8 +209,9 @@ async function analyzeImagesTwoStep(params: {
   patientAge: number
   patientGender: 'M' | 'F'
   language: 'pl' | 'en'
+  imageQualityHint?: 'diagnostic' | 'suboptimal' | 'non_diagnostic'
 }): Promise<ImageAnalysisResult> {
-  const useThinking = params.images.length >= 3
+  const useThinking = params.images.length >= 3 || params.imageQualityHint === 'suboptimal'
   const imageCount = params.images.length
 
   const imageContent: Anthropic.ImageBlockParam[] = params.images.map(img => ({
@@ -326,8 +327,9 @@ async function analyzeImagesAdvanced(params: {
   patientAge: number
   patientGender: 'M' | 'F'
   language: 'pl' | 'en'
+  imageQualityHint?: 'diagnostic' | 'suboptimal' | 'non_diagnostic'
 }): Promise<ImageAnalysisResult> {
-  const useThinking = params.images.length >= 3
+  const useThinking = params.images.length >= 3 || params.imageQualityHint === 'suboptimal'
   const examLayer2 = buildAnalyzeImageSystemPrompt(params.examinationType, params.patientGender)
 
   const imageContent: Anthropic.ImageBlockParam[] = params.images.map(img => ({
@@ -505,6 +507,7 @@ export async function analyzeImages(params: {
   patientAge: number
   patientGender: 'M' | 'F'
   language: 'pl' | 'en'
+  imageQualityHint?: 'diagnostic' | 'suboptimal' | 'non_diagnostic'
 }): Promise<ImageAnalysisResult> {
   if (ADVANCED) {
     return analyzeImagesAdvanced(params)

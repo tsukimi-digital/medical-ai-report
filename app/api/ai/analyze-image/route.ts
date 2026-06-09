@@ -69,6 +69,8 @@ export async function POST(request: NextRequest) {
         })
       )
 
+      const imageQualityHint = formData.get('imageQualityHint') as string | null
+
       const result = await analyzeImages({
         images,
         examinationType,
@@ -78,6 +80,7 @@ export async function POST(request: NextRequest) {
         patientAge: Number(patientAge),
         patientGender: patientGender as 'M' | 'F',
         language: ((formData.get('language') as string | null) ?? 'pl') as 'pl' | 'en',
+        imageQualityHint: (imageQualityHint as 'diagnostic' | 'suboptimal' | 'non_diagnostic' | null) ?? undefined,
       })
 
       clearTimeout(timeoutId)
