@@ -37,13 +37,15 @@ export function Modal({ open, onClose, children, lg, title }: ModalProps) {
     <div
       className="scrim"
       onClick={onClose}
-      role="dialog"
-      aria-modal
-      aria-label={title}
+      role="presentation"
     >
       <div
         ref={dialogRef}
         className={`modal${lg ? ' modal-lg' : ''}`}
+        role="dialog"
+        aria-modal
+        aria-label={title}
+        {...(title ? { 'aria-labelledby': 'modal-title' } : {})}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           // Focus trap: keep Tab within modal
