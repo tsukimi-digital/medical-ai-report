@@ -154,3 +154,7 @@
 - [x] **visit/[id] render uncertainItems[]** — sekcja "Wymaga weryfikacji" po polu diagnosis gdy !isApproved
 - [x] **visit/[id] badge "Źródło AI"** — po zatwierdzeniu wizyty pokazuje `approvedSource: srcVoice`
 - [x] **examination-context-fields priorSurgery** — nowe pole dla USG brzusznych/wątrobowych + klucze i18n
+- [x] **examination/[id] — patient header** — wiersz imię/nazwisko · PESEL · wiek pod h1 (draft + approved)
+- [x] **examination/[id] — Dane badania card** — textarea clinicalIndication + radComments, edytowalne w draft (PUT na onBlur), readonly w approved
+- [x] **examination/[id] — AI provenance banner** — "Wygenerowane przez AI — wymaga weryfikacji" (draft) / approver + timestamp + source (approved)
+- [x] **visit/[id] — add/remove patient explanation items** — "Kluczowe wyniki" + "Co dalej": przyciski Usuń punkt/krok + Dodaj punkt/krok + empty-state message
