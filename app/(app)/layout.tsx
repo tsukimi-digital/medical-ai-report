@@ -134,7 +134,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
       {/* Lang change toast */}
       {showLangToast && (
-        <Toast message={t('langToast')} onDismiss={handleDismissToast} />
+        <Toast
+          message={
+            lang === 'pl'
+              ? `Wygenerowany raport jest w języku PL. Zmiana języka interfejsu nie wpływa na treść raportu.`
+              : `The generated report is in EN. Changing the interface language does not affect report content.`
+          }
+          onDismiss={handleDismissToast}
+        />
       )}
     </div>
   )
