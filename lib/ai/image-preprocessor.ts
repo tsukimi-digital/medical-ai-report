@@ -11,7 +11,7 @@ export async function preprocessImage(buffer: Buffer): Promise<{ data: Buffer; m
   const processed = await sharp(buffer)
     .resize(1568, 1568, { fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 85 })
-    .withMetadata({ exif: {} }) // strip EXIF
+    .withMetadata(false) // strip all metadata (EXIF + IPTC + XMP + ICC profile)
     .toBuffer()
 
   return { data: processed, mimeType: 'image/jpeg' }
