@@ -16,13 +16,14 @@ import { AiSuggestions } from '@/components/ai-suggestions'
 import { QualityCheckPanel } from '@/components/quality-check-panel'
 import { FusionResultPanel } from '@/components/fusion-result'
 import { EvidenceViewer } from '@/components/evidence-viewer'
-import type { RadiologicalReport, Finding } from '@/lib/types'
+import type { RadiologicalReport, Finding, Patient } from '@/lib/types'
 
 export default function ExaminationDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { lang, t } = useI18n()
 
   const [report, setReport] = useState<RadiologicalReport | null>(null)
+  const [patient, setPatient] = useState<Patient | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [approving, setApproving] = useState(false)
@@ -30,13 +31,29 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
   const [evidenceFinding, setEvidenceFinding] = useState<Finding | null>(null)
   const [showEvidenceModal, setShowEvidenceModal] = useState(false)
   const [manualMode, setManualMode] = useState(false)
+  const [savingField, setSavingField] = useState<string | null>(null)
 
   useEffect(() => {
     apiClient.getRadReport(params.id)
-      .then(({ report }) => setReport(report))
+      .then(({ report }) => {
+        setReport(report)
+        return apiClient.getPatient(report.patientId)
+      })
+      .then(({ patient }) => setPatient(patient))
       .catch(() => setError(lang === 'en' ? 'Report not found.' : 'Nie znaleziono raportu.'))
       .finally(() => setLoading(false))
   }, [params.id, lang])
+
+  const saveField = async (field: 'clinicalIndication' | 'comments', value: string) => {
+    if (!report || report.status === 'approved') return
+    setSavingField(field)
+    try {
+      const { report: updated } = await apiClient.updateRadReport(report.id, { [field]: value })
+      setReport(updated)
+    } finally {
+      setSavingField(null)
+    }
+  }
 
   const handleApprove = async () => {
     if (!report) return
@@ -88,7 +105,7 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
 
         <div className="row between wrap g16" style={{ marginBottom: 20 }}>
           <div>
-            <div className="row g10" style={{ marginBottom: 4 }}>
+            <div className="row g10" style={{ marginBottom: 6 }}>
               <h1 className="h-page">{report.examinationType}</h1>
               {report.caseKey && (
                 <span className="badge badge-accent badge-sq mono" style={{ fontWeight: 700 }}>
@@ -108,6 +125,20 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
                 </span>
               )}
             </div>
+
+            {/* Patient info row */}
+            {patient && (
+              <div className="row g10 wrap" style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>
+                <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                  {patient.firstName} {patient.lastName}
+                </span>
+                <span className="faint">·</span>
+                <span className="faint mono" style={{ fontSize: 12 }}>{patient.pesel}</span>
+                <span className="faint">·</span>
+                <span className="faint">{patient.age} {lang === 'pl' ? 'lat' : 'yo'}, {patient.gender === 'F' ? (lang === 'pl' ? 'K' : 'F') : 'M'}</span>
+              </div>
+            )}
+
             <div className="faint row g8" style={{ fontSize: 12.5 }}>
               {report.analysisMode && (
                 <span className="row g4">
@@ -149,6 +180,30 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
           )}
         </div>
 
+        {/* AI provenance banner */}
+        {!isApproved && report.aiGenerated && (
+          <div style={{ marginBottom: 12 }}>
+            <Banner kind="info">
+              <span className="row g6">
+                <Icon name="sparkle" size={13} aria-hidden />
+                {lang === 'pl' ? 'Wygenerowane przez AI — wymaga weryfikacji przed zatwierdzeniem.' : 'AI-generated — requires verification before approval.'}
+              </span>
+            </Banner>
+          </div>
+        )}
+        {isApproved && report.aiGenerated && (
+          <div style={{ marginBottom: 12 }}>
+            <Banner kind="info">
+              <span className="row g6">
+                <Icon name="sparkle" size={13} aria-hidden />
+                {lang === 'pl'
+                  ? `Raport zatwierdzony${report.approvedByName ? ` — ${report.approvedByName}` : ''}${report.approvedAt ? ` · ${new Date(report.approvedAt).toLocaleString(lang === 'pl' ? 'pl-PL' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })}` : ''} · Źródło AI: ${report.analysisMode === 'image' ? 'zdjęcie' : report.analysisMode === 'voice' ? 'głos' : 'multimodal'}`
+                  : `Approved${report.approvedByName ? ` — ${report.approvedByName}` : ''}${report.approvedAt ? ` · ${new Date(report.approvedAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}` : ''} · AI source: ${report.analysisMode}`}
+              </span>
+            </Banner>
+          </div>
+        )}
+
         {/* Banners */}
         {report.imageQuality === 'suboptimal' && (
           <div style={{ marginBottom: 16 }}>
@@ -172,9 +227,63 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
             </Banner>
           </div>
         )}
-        {isApproved && (
-          <div style={{ marginBottom: 16 }}>
-            <Banner kind="info">{t('reportReadonly')}</Banner>
+        {/* Examination context card — clinical indication + comments */}
+        {(report.clinicalIndication || report.comments || !isApproved) && (
+          <div className="card card-pad" style={{ marginBottom: 20 }}>
+            <div className="eyebrow row g6" style={{ marginBottom: 14 }}>
+              <Icon name="flask" size={14} aria-hidden />
+              {lang === 'pl' ? 'Dane badania' : 'Examination context'}
+            </div>
+            <div className="col g14">
+              <div>
+                <label className="field-label" htmlFor="clinicalIndication">
+                  {lang === 'pl' ? 'Wskazanie kliniczne' : 'Clinical indication'}
+                  {!isApproved && <span className="opt"> ({lang === 'pl' ? 'opcjonalne' : 'optional'})</span>}
+                </label>
+                {isApproved ? (
+                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: report.clinicalIndication ? 'var(--text)' : 'var(--text-faint)' }}>
+                    {report.clinicalIndication || (lang === 'pl' ? '—' : '—')}
+                  </p>
+                ) : (
+                  <textarea
+                    id="clinicalIndication"
+                    className="textarea"
+                    rows={2}
+                    placeholder={lang === 'pl' ? 'Przepisz ze skierowania…' : 'Copy from referral…'}
+                    defaultValue={report.clinicalIndication ?? ''}
+                    onBlur={(e) => saveField('clinicalIndication', e.target.value)}
+                    style={{ fontSize: 13 }}
+                  />
+                )}
+              </div>
+              <div>
+                <label className="field-label" htmlFor="radComments">
+                  {lang === 'pl' ? 'Komentarz radiologa' : 'Radiologist comment'}
+                  {!isApproved && <span className="opt"> ({lang === 'pl' ? 'opcjonalne' : 'optional'})</span>}
+                </label>
+                {isApproved ? (
+                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: report.comments ? 'var(--text)' : 'var(--text-faint)' }}>
+                    {report.comments || '—'}
+                  </p>
+                ) : (
+                  <textarea
+                    id="radComments"
+                    className="textarea"
+                    rows={2}
+                    placeholder={lang === 'pl' ? 'Uwagi przed analizą…' : 'Notes before analysis…'}
+                    defaultValue={report.comments ?? ''}
+                    onBlur={(e) => saveField('comments', e.target.value)}
+                    style={{ fontSize: 13 }}
+                  />
+                )}
+              </div>
+              {savingField && (
+                <div className="row g6 faint" style={{ fontSize: 12 }}>
+                  <Icon name="loader" size={12} className="spin" aria-hidden />
+                  {lang === 'pl' ? 'Zapisywanie…' : 'Saving…'}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

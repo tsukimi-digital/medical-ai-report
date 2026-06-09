@@ -9,6 +9,7 @@ const UpdateRadiologyReportSchema = z.object({
   impression: z.string().optional(),
   imagingLimitations: z.string().optional(),
   radiologistRecommendations: z.string().optional(),
+  clinicalIndication: z.string().optional(),
   comments: z.string().optional(),
 }).strict()
 
