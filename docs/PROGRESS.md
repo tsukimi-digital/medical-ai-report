@@ -140,3 +140,17 @@
   - [x] rad-A-appr: badge-approved, brak badge-AI, brak przycisku Zatwierdź
 - [x] Weryfikacja gate: fetch( w api-client.ts → 21 wywołań (> 0 ✓)
 - [x] Wynik: 79 testów — 79 passed, 0 failed
+
+## Faza 7 — Poprawki UI z audytu QA #2 (FE: Yuki Sato) — feature/qa-fixes-fe-2
+
+### FE (Yuki Sato) — feature/qa-fixes-fe-2
+- [x] **VoiceRecorder i18n** — `components/voice-recorder.tsx`: replace hardcoded PL strings (recReady/recSend/recReset) with `useI18n` + nowe klucze w pl.ts/en.ts
+- [x] **Generate button dynamiczna etykieta** — `examination/new/page.tsx`: idle→genImage/genVoice/genMulti, loading→analyzing; disable multimodal gdy brak obu inputów
+- [x] **Findings "zmodyfikowane" badge** — `components/findings-list.tsx`: po edycji tekstu finding → chip-edited z ostrzeżeniem
+- [x] **Modal a11y** — `components/ui/modal.tsx`: przenieść `role="dialog"` + `aria-modal` z .scrim na .modal; scrim → `role="presentation"`
+- [x] **langToast dynamiczny** — `app/(app)/layout.tsx`: komunikat dostosowany do aktualnego języka (PL/EN) zamiast hardcoded "PL"
+- [x] **visit/[id] layout dwukolumnowy** — zmiana `page-narrow` → `page-wide` gdy raport istnieje
+- [x] **visit/[id] edytowalna patient explanation** — pola input/textarea zamiast read-only przed zatwierdzeniem; merge do approve payload
+- [x] **visit/[id] render uncertainItems[]** — sekcja "Wymaga weryfikacji" po polu diagnosis gdy !isApproved
+- [x] **visit/[id] badge "Źródło AI"** — po zatwierdzeniu wizyty pokazuje `approvedSource: srcVoice`
+- [x] **examination-context-fields priorSurgery** — nowe pole dla USG brzusznych/wątrobowych + klucze i18n
