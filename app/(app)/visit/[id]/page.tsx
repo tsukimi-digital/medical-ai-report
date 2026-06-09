@@ -445,13 +445,23 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                           }
                         />
                       </div>
-                      {editedExplanation.keyFindings.length > 0 && (
-                        <div>
-                          <div className="eyebrow" style={{ marginBottom: 8 }}>{t('keyFindings')}</div>
-                          <div className="col g6">
-                            {editedExplanation.keyFindings.map((f, i) => (
+                      <div>
+                        <div className="row between" style={{ marginBottom: 8 }}>
+                          <div className="eyebrow">{t('keyFindings')}</div>
+                          <button
+                            type="button"
+                            className="link row g4"
+                            style={{ fontSize: 12, fontWeight: 500 }}
+                            onClick={() => setEditedExplanation({ ...editedExplanation, keyFindings: [...editedExplanation.keyFindings, ''] })}
+                          >
+                            <Icon name="plus" size={13} aria-hidden />
+                            {lang === 'pl' ? 'Dodaj punkt' : 'Add item'}
+                          </button>
+                        </div>
+                        <div className="col g6">
+                          {editedExplanation.keyFindings.map((f, i) => (
+                            <div key={i} className="row g6">
                               <input
-                                key={i}
                                 className="input"
                                 value={f}
                                 onChange={(e) => {
@@ -459,19 +469,43 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                                   updated[i] = e.target.value
                                   setEditedExplanation({ ...editedExplanation, keyFindings: updated })
                                 }}
-                                style={{ fontSize: 13 }}
+                                style={{ fontSize: 13, flex: 1 }}
                               />
-                            ))}
-                          </div>
+                              <button
+                                type="button"
+                                className="iconbtn"
+                                aria-label={lang === 'pl' ? 'Usuń punkt' : 'Remove item'}
+                                onClick={() => setEditedExplanation({ ...editedExplanation, keyFindings: editedExplanation.keyFindings.filter((_, j) => j !== i) })}
+                              >
+                                <Icon name="x" size={14} aria-hidden />
+                              </button>
+                            </div>
+                          ))}
+                          {editedExplanation.keyFindings.length === 0 && (
+                            <p className="faint" style={{ margin: 0, fontSize: 12 }}>
+                              {lang === 'pl' ? 'Brak punktów — kliknij „Dodaj punkt"' : 'No items — click "Add item"'}
+                            </p>
+                          )}
                         </div>
-                      )}
-                      {editedExplanation.nextSteps.length > 0 && (
-                        <div>
-                          <div className="eyebrow" style={{ marginBottom: 8 }}>{t('nextSteps')}</div>
-                          <div className="col g6">
-                            {editedExplanation.nextSteps.map((s, i) => (
+                      </div>
+                      <div>
+                        <div className="row between" style={{ marginBottom: 8 }}>
+                          <div className="eyebrow">{t('nextSteps')}</div>
+                          <button
+                            type="button"
+                            className="link row g4"
+                            style={{ fontSize: 12, fontWeight: 500 }}
+                            onClick={() => setEditedExplanation({ ...editedExplanation, nextSteps: [...editedExplanation.nextSteps, ''] })}
+                          >
+                            <Icon name="plus" size={13} aria-hidden />
+                            {lang === 'pl' ? 'Dodaj krok' : 'Add step'}
+                          </button>
+                        </div>
+                        <div className="col g6">
+                          {editedExplanation.nextSteps.map((s, i) => (
+                            <div key={i} className="row g6">
+                              <span className="mono faint" style={{ fontSize: 12, minWidth: 18, paddingTop: 9 }}>{i + 1}.</span>
                               <input
-                                key={i}
                                 className="input"
                                 value={s}
                                 onChange={(e) => {
@@ -479,12 +513,25 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                                   updated[i] = e.target.value
                                   setEditedExplanation({ ...editedExplanation, nextSteps: updated })
                                 }}
-                                style={{ fontSize: 13 }}
+                                style={{ fontSize: 13, flex: 1 }}
                               />
-                            ))}
-                          </div>
+                              <button
+                                type="button"
+                                className="iconbtn"
+                                aria-label={lang === 'pl' ? 'Usuń krok' : 'Remove step'}
+                                onClick={() => setEditedExplanation({ ...editedExplanation, nextSteps: editedExplanation.nextSteps.filter((_, j) => j !== i) })}
+                              >
+                                <Icon name="x" size={14} aria-hidden />
+                              </button>
+                            </div>
+                          ))}
+                          {editedExplanation.nextSteps.length === 0 && (
+                            <p className="faint" style={{ margin: 0, fontSize: 12 }}>
+                              {lang === 'pl' ? 'Brak kroków — kliknij „Dodaj krok"' : 'No steps — click "Add step"'}
+                            </p>
+                          )}
                         </div>
-                      )}
+                      </div>
                       <div>
                         <label className="field-label">{t('followUp')}</label>
                         <input
