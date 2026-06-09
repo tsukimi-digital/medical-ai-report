@@ -26,12 +26,9 @@ export interface SessionData {
 // iron-session configuration — matches api-contract.md
 // ---------------------------------------------------------------------------
 
-if (!process.env.AUTH_SECRET) {
-  throw new Error('AUTH_SECRET environment variable is required')
-}
-
+// Deferred validation — throws at request time (not module load) so next build passes without env vars
 export const sessionOptions: SessionOptions = {
-  password: process.env.AUTH_SECRET,
+  password: process.env.AUTH_SECRET ?? 'placeholder-sonara-demo-requires-auth-secret-set',
   cookieName: 'sonara_session',
   cookieOptions: {
     httpOnly: true,

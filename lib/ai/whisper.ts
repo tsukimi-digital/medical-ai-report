@@ -1,6 +1,11 @@
 import OpenAI from 'openai'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+// Lazy initialization — defer client creation to request time so next build passes without env vars
+let _openai: OpenAI | null = null
+function getOpenAI(): OpenAI {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  return _openai
+}
 
 /**
  * ~224 tokens of Polish medical terminology priming for Whisper.
@@ -78,7 +83,7 @@ export async function transcribeAudio(
   const arrayBuffer = audioBlob.buffer.slice(audioBlob.byteOffset, audioBlob.byteOffset + audioBlob.byteLength) as ArrayBuffer
   const file = new File([arrayBuffer], filename, { type: mimeType })
 
-  const result = await openai.audio.transcriptions.create({
+  const result = await getOpenAI().audio.transcriptions.create({
     file,
     model: 'whisper-1',
     language: 'pl',
