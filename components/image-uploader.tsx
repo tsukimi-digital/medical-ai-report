@@ -14,7 +14,7 @@ type ImageUploaderProps = {
 }
 
 const MAX_FILES = 5
-const MAX_SIZE = 5 * 1024 * 1024 // 5 MB
+const MAX_SIZE = 10 * 1024 * 1024 // 10 MB
 
 export function ImageUploader({
   onFiles,
@@ -22,7 +22,7 @@ export function ImageUploader({
   maxFiles = MAX_FILES,
   maxSizeBytes = MAX_SIZE,
   label = 'Obrazy USG',
-  hint = 'Przeciągnij i upuść — max 5 plików, do 5 MB każdy',
+  hint = 'Przeciągnij i upuść — max 5 plików, do 10 MB każdy',
   uploadCta = 'Wybierz pliki',
 }: ImageUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null)

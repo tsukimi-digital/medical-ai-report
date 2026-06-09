@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getIronSession } from 'iron-session'
-import { sessionOptions, type SessionData } from './lib/auth'
+import { getSessionOptions, type SessionData } from './lib/auth'
 import { cookies } from 'next/headers'
 
 export async function middleware(request: NextRequest) {
@@ -19,7 +19,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // For all protected (app) routes, check session
-  const session = await getIronSession<SessionData>(await cookies(), sessionOptions)
+  const session = await getIronSession<SessionData>(await cookies(), getSessionOptions())
 
   if (!session.user) {
     // API routes return 401; page routes redirect to /login

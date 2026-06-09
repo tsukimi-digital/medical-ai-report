@@ -1,4 +1,5 @@
 export const maxDuration = 60
+export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
@@ -27,8 +28,8 @@ export async function POST(request: NextRequest) {
   }
 
   for (const file of imageFiles) {
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: `Image ${file.name} exceeds 5 MB limit` }, { status: 400 })
+    if (file.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: `Image ${file.name} exceeds 10 MB limit` }, { status: 400 })
     }
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
     if (!allowedTypes.includes(file.type)) {
@@ -68,6 +69,8 @@ export async function POST(request: NextRequest) {
         })
       )
 
+      const imageQualityHint = formData.get('imageQualityHint') as string | null
+
       const result = await analyzeImages({
         images,
         examinationType,
@@ -77,6 +80,7 @@ export async function POST(request: NextRequest) {
         patientAge: Number(patientAge),
         patientGender: patientGender as 'M' | 'F',
         language: ((formData.get('language') as string | null) ?? 'pl') as 'pl' | 'en',
+        imageQualityHint: (imageQualityHint as 'diagnostic' | 'suboptimal' | 'non_diagnostic' | null) ?? undefined,
       })
 
       clearTimeout(timeoutId)

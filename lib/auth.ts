@@ -26,19 +26,21 @@ export interface SessionData {
 // iron-session configuration — matches api-contract.md
 // ---------------------------------------------------------------------------
 
-if (!process.env.AUTH_SECRET) {
-  throw new Error('AUTH_SECRET environment variable is required')
-}
-
-export const sessionOptions: SessionOptions = {
-  password: process.env.AUTH_SECRET,
-  cookieName: 'sonara_session',
-  cookieOptions: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 15, // 15 minutes
-  },
+export function getSessionOptions(): SessionOptions {
+  const secret = process.env.AUTH_SECRET
+  if (!secret) {
+    throw new Error('AUTH_SECRET environment variable is required')
+  }
+  return {
+    password: secret,
+    cookieName: 'sonara_session',
+    cookieOptions: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 15, // 15 minutes
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -47,7 +49,7 @@ export const sessionOptions: SessionOptions = {
 
 /** Returns the iron-session for the current Next.js request context. */
 export async function getSession() {
-  return getIronSession<SessionData>(await cookies(), sessionOptions)
+  return getIronSession<SessionData>(await cookies(), getSessionOptions())
 }
 
 /**

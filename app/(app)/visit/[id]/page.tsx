@@ -12,7 +12,9 @@ import { useI18n } from '@/lib/i18n/index'
 import { apiClient } from '@/lib/api-client'
 import { VoiceRecorder } from '@/components/voice-recorder'
 import { QualityCheckPanel } from '@/components/quality-check-panel'
-import type { MedicalReport, Patient } from '@/lib/types'
+import { PatientSelector } from '@/components/patient-selector'
+import { ReportSelector } from '@/components/report-selector'
+import type { MedicalReport, Patient, RadiologicalReport } from '@/lib/types'
 
 const NEW_VISIT_ID = 'new'
 
@@ -31,17 +33,39 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
   const [rawTranscription, setRawTranscription] = useState<string | null>(null)
   const [isProcessingReport, setIsProcessingReport] = useState(false)
 
+  // New-visit patient & rad report selection
+  const [allPatients, setAllPatients] = useState<Patient[]>([])
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
+  const [patientRadReports, setPatientRadReports] = useState<RadiologicalReport[]>([])
+  const [selectedRadReport, setSelectedRadReport] = useState<RadiologicalReport | null>(null)
+
+  // Sidebar: radiological report context for existing visits
+  const [radReportContext, setRadReportContext] = useState<RadiologicalReport | null>(null)
+
   useEffect(() => {
-    if (isNew) return
+    if (isNew) {
+      apiClient.getPatients().then(({ patients }) => setAllPatients(patients)).catch(() => {})
+      return
+    }
     apiClient.getMedReport(params.id)
       .then(({ report }) => {
         setReport(report)
-        return apiClient.getPatient(report.patientId)
+        const patientFetch = apiClient.getPatient(report.patientId).then(({ patient }) => setPatient(patient))
+        const radFetch = report.radiologicalReportId
+          ? apiClient.getRadReport(report.radiologicalReportId).then(({ report: r }) => setRadReportContext(r)).catch(() => {})
+          : Promise.resolve()
+        return Promise.all([patientFetch, radFetch])
       })
-      .then(({ patient }) => setPatient(patient))
       .catch(() => setError(lang === 'en' ? 'Visit not found.' : 'Nie znaleziono wizyty.'))
       .finally(() => setLoading(false))
   }, [params.id, lang, isNew])
+
+  useEffect(() => {
+    if (!selectedPatient) { setPatientRadReports([]); setSelectedRadReport(null); return }
+    apiClient.getRadReports(selectedPatient.id)
+      .then(({ reports }) => setPatientRadReports(reports.filter(r => r.status === 'approved')))
+      .catch(() => {})
+  }, [selectedPatient])
 
   const handleVoiceRecording = async (blob: Blob, _mimeType: string) => {
     setTranscribing(true)
@@ -55,13 +79,13 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
       setIsProcessingReport(true)
 
       if (!report) {
-        // New visit — create the report shell first, then generate in parallel
-        const { patients } = await apiClient.getPatients()
-        const defaultPatient = patients[0]
+        // New visit — use the patient selected in the UI
+        const chosenPatient = selectedPatient ?? allPatients[0]
 
         const { report: created } = await apiClient.createMedReport({
-          patientId: defaultPatient?.id ?? 'p-anna',
+          patientId: chosenPatient?.id ?? 'p-anna',
           transcription,
+          ...(selectedRadReport ? { radiologicalReportId: selectedRadReport.id } : {}),
         })
 
         // Phase 2: generate medical report AND patient explanation simultaneously
@@ -69,9 +93,10 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
           apiClient.generateReport({
             transcription,
             role: 'doctor',
-            patientAge: defaultPatient?.age ?? 0,
-            patientGender: (defaultPatient?.gender ?? 'F') as 'M' | 'F',
+            patientAge: chosenPatient?.age ?? 0,
+            patientGender: (chosenPatient?.gender ?? 'F') as 'M' | 'F',
             language: lang,
+            ...(selectedRadReport ? { radiologicalReportId: selectedRadReport.id } : {}),
           }),
           // Patient explanation generated concurrently (result applied below when draft arrives)
           apiClient.generatePatientExplanation({
@@ -86,7 +111,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
           transcription,
         })
         setReport(updated)
-        if (defaultPatient) setPatient(defaultPatient)
+        if (chosenPatient) setPatient(chosenPatient)
         router.push(`/visit/${updated.id}`)
       } else {
         // Existing visit — generate against known report
@@ -226,8 +251,75 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
           </div>
         )}
 
+        {/* New visit: patient + rad report selectors */}
+        {isNew && !report && (
+          <div className="card card-pad" style={{ marginBottom: 20 }}>
+            <div className="col g16">
+              <div>
+                <label className="field-label">{t('selectPatient')}</label>
+                <PatientSelector
+                  value={selectedPatient}
+                  onChange={setSelectedPatient}
+                  patients={allPatients}
+                  placeholder={t('selectPatientPh')}
+                  lang={lang}
+                />
+              </div>
+              {selectedPatient && (
+                <div>
+                  <label className="field-label">
+                    {t('selectRadReport')}
+                    <span className="opt"> ({t('optional')})</span>
+                  </label>
+                  <ReportSelector
+                    value={selectedRadReport}
+                    onChange={setSelectedRadReport}
+                    reports={patientRadReports}
+                    placeholder={t('selectRadReport')}
+                    emptyText={t('noRadReport')}
+                    lang={lang}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Sidebar: radiological report context (existing visits with linked rad report) */}
+        {!isNew && radReportContext && (
+          <div style={{ marginBottom: 20 }}>
+            <Collapse title={t('radContext')} icon="image" defaultOpen>
+              <div style={{ padding: 16 }} className="col g12">
+                {radReportContext.impression && (
+                  <div>
+                    <div className="eyebrow" style={{ marginBottom: 6 }}>
+                      {lang === 'pl' ? 'Wnioski' : 'Impression'}
+                    </div>
+                    <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55 }}>{radReportContext.impression}</p>
+                  </div>
+                )}
+                {radReportContext.findings.length > 0 && (
+                  <div>
+                    <div className="eyebrow" style={{ marginBottom: 8 }}>
+                      {lang === 'pl' ? 'Znaleziska' : 'Findings'}
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {radReportContext.findings.map((f, i) => (
+                        <li key={i} style={{ fontSize: 12.5, marginBottom: 4, color: f.isDeviation ? 'var(--warn-fg)' : 'inherit' }}>
+                          {f.text}
+                          {f.anatomicalLocation && <span className="faint"> — {f.anatomicalLocation}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </Collapse>
+          </div>
+        )}
+
         {/* Voice recorder */}
-        {!isApproved && (
+        {!isApproved && (!isNew || selectedPatient) && (
           <div className="card card-pad-lg" style={{ marginBottom: 20 }}>
             <div className="h-sec row g8" style={{ marginBottom: 14 }}>
               <Icon name="mic" size={17} style={{ color: 'var(--accent-700)' }} aria-hidden />
