@@ -7,6 +7,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    include: ['tests/unit/**/*.{test,spec}.ts'],
     setupFiles: './tests/setup.ts',
     env: {
       AUTH_SECRET: 'test-secret-for-unit-tests-only-32chars!',

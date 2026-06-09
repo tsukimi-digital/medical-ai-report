@@ -88,11 +88,25 @@ test.describe('Case C — Lekarz: wizyta', () => {
     expect(page.url()).toContain('/visit/new')
   })
 
-  test('new visit page (/visit/new) renders voice recorder', async ({ page }) => {
+  test('new visit page (/visit/new) renders voice recorder after patient selection', async ({ page }) => {
     await page.goto('/visit/new')
     await page.waitForSelector('h1', { timeout: 10_000 })
 
-    // New visit shows VoiceRecorder to record the visit
+    // Patient must be selected first — VoiceRecorder is gated on (!isNew || selectedPatient)
+    const combobox = page.getByRole('combobox', { name: /szukaj po nazwisku|search/i }).first()
+    await expect(combobox).toBeVisible({ timeout: 5_000 })
+    await combobox.click()
+
+    // Type in the search input that opens inside the dropdown
+    const searchInput = page.locator('[role=listbox] input').first()
+    await searchInput.fill('Anna')
+
+    // Click the first option (Anna Kowalska)
+    const option = page.locator('[role=option]').first()
+    await expect(option).toBeVisible({ timeout: 3_000 })
+    await option.click()
+
+    // Now the voice recorder should be visible
     const recordBtn = page.locator('button').filter({ hasText: /nagraj wizytę|record visit|nagraj/i }).first()
     await expect(recordBtn).toBeVisible({ timeout: 5_000 })
   })
