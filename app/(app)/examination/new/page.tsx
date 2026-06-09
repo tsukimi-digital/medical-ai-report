@@ -374,11 +374,22 @@ export default function NewExaminationPage() {
             icon="sparkle"
             onClick={handleGenerate}
             loading={loading || isProcessingReport}
-            disabled={!patient || !examType || isProcessingReport}
+            disabled={
+              !patient ||
+              !examType ||
+              isProcessingReport ||
+              (mode === 'multimodal' && !(images.length > 0 && voiceBlob !== null))
+            }
             className="btn-block"
             type="button"
           >
-            {t('analyzing')}
+            {loading || isProcessingReport
+              ? t('analyzing')
+              : mode === 'image'
+              ? t('genImage')
+              : mode === 'voice'
+              ? t('genVoice')
+              : t('genMulti')}
           </Btn>
         </div>
       </div>

@@ -12,10 +12,11 @@ const CYCLE_OPTIONS = [
   { value: 'on_contraceptives', pl: 'Antykoncepcja', en: 'On contraceptives' },
 ]
 
-function contextFor(type: string | null): Array<'fasting' | 'cycle' | 'labValues'> {
+function contextFor(type: string | null): Array<'fasting' | 'cycle' | 'labValues' | 'priorSurgery'> {
   if (!type) return []
   if (type.includes('ginekolog')) return ['cycle']
-  if (/jamy brzusznej|wątroby|pęcherzyka|trzustki|śledziony|nerek/.test(type)) return ['fasting']
+  if (/jamy brzusznej|wątroby|pęcherzyka|trzustki|śledziony/.test(type)) return ['fasting', 'priorSurgery']
+  if (/nerek/.test(type)) return ['fasting']
   if (type.includes('tarczycy')) return ['labValues']
   return []
 }
@@ -112,6 +113,24 @@ export function ExaminationContextFields({
                 })
                 onChange({ ...context, relevantLabValues: vals })
               }}
+            />
+          </div>
+        )}
+
+        {fields.includes('priorSurgery') && (
+          <div>
+            <label className="field-label" htmlFor="prior-surgery">
+              {t('Przebyte zabiegi', 'Prior surgery')}
+              <span className="opt"> ({t('opcjonalne', 'optional')})</span>
+            </label>
+            <input
+              id="prior-surgery"
+              className="input"
+              placeholder={t('np. cholecystektomia (opcjonalne)', 'e.g. cholecystectomy (optional)')}
+              value={context.priorSurgery ?? ''}
+              onChange={(e) =>
+                onChange({ ...context, priorSurgery: e.target.value || undefined })
+              }
             />
           </div>
         )}

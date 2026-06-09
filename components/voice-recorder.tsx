@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { Icon } from './ui/icon'
 import { Btn } from './ui/button'
+import { useI18n } from '@/lib/i18n/index'
 
 type RecorderState = 'idle' | 'recording' | 'stopped'
 
@@ -33,6 +34,7 @@ export function VoiceRecorder({
   labelRecord = 'Nagraj głos',
   labelStop = 'Zatrzymaj',
 }: VoiceRecorderProps) {
+  const { t } = useI18n()
   const [state, setState] = useState<RecorderState>('idle')
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -136,17 +138,17 @@ export function VoiceRecorder({
         <div className="panel col g10" style={{ padding: '12px 14px' }}>
           <div className="row g10">
             <Icon name="waveform" size={16} style={{ color: 'var(--accent-700)' }} aria-hidden />
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Nagranie gotowe</span>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>{t('recReady')}</span>
             <span className="faint mono" style={{ fontSize: 12 }}>{formatDuration(duration)}</span>
           </div>
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <audio src={audioUrl} controls style={{ width: '100%', height: 36 }} aria-label="Podgląd nagrania" />
           <div className="row g8">
             <Btn variant="primary" size="sm" icon="upload" onClick={sendRecording} type="button">
-              Wyślij do transkrypcji
+              {t('recSend')}
             </Btn>
             <Btn variant="ghost" size="sm" onClick={resetRecording} type="button">
-              Nagraj ponownie
+              {t('recReset')}
             </Btn>
           </div>
         </div>

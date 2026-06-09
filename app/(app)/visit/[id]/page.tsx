@@ -14,7 +14,7 @@ import { VoiceRecorder } from '@/components/voice-recorder'
 import { QualityCheckPanel } from '@/components/quality-check-panel'
 import { PatientSelector } from '@/components/patient-selector'
 import { ReportSelector } from '@/components/report-selector'
-import type { MedicalReport, Patient, RadiologicalReport } from '@/lib/types'
+import type { MedicalReport, Patient, RadiologicalReport, PatientExplanation } from '@/lib/types'
 
 const NEW_VISIT_ID = 'new'
 
@@ -42,6 +42,9 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
   // Sidebar: radiological report context for existing visits
   const [radReportContext, setRadReportContext] = useState<RadiologicalReport | null>(null)
 
+  // Editable patient explanation (local state for pre-approval editing)
+  const [editedExplanation, setEditedExplanation] = useState<PatientExplanation | null>(null)
+
   useEffect(() => {
     if (isNew) {
       apiClient.getPatients().then(({ patients }) => setAllPatients(patients)).catch(() => {})
@@ -50,6 +53,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
     apiClient.getMedReport(params.id)
       .then(({ report }) => {
         setReport(report)
+        if (report.patientExplanation) setEditedExplanation(report.patientExplanation)
         const patientFetch = apiClient.getPatient(report.patientId).then(({ patient }) => setPatient(patient))
         const radFetch = report.radiologicalReportId
           ? apiClient.getRadReport(report.radiologicalReportId).then(({ report: r }) => setRadReportContext(r)).catch(() => {})
@@ -138,6 +142,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
           ...(explanation ? { patientExplanation: explanation } : {}),
         })
         setReport(updated)
+        if (updated.patientExplanation) setEditedExplanation(updated.patientExplanation)
         setRawTranscription(null) // clear preview — editor now has the draft
       }
     } catch {
@@ -152,6 +157,10 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
     if (!report) return
     setApproving(true)
     try {
+      // Merge editedExplanation into report before approving
+      if (editedExplanation && editedExplanation !== report.patientExplanation) {
+        await apiClient.updateMedReport(report.id, { patientExplanation: editedExplanation })
+      }
       const { report: updated } = await apiClient.approveMedReport(report.id)
       setReport(updated)
       setShowApproveModal(false)
@@ -189,7 +198,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
 
   return (
     <div className="page">
-      <div className="page-narrow">
+      <div className={report && !isNew ? 'page-wide' : 'page-narrow'}>
         <Link href="/dashboard" className="link row g6" style={{ marginBottom: 14, fontSize: 13, textDecoration: 'none' }}>
           <Icon name="arrowLeft" size={15} aria-hidden />
           {t('backToDash')}
@@ -214,6 +223,12 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                 <span className="badge badge-ai">
                   <Icon name="sparkle" size={11} aria-hidden />
                   {t('aiDraftBadge')}
+                </span>
+              )}
+              {isApproved && (
+                <span className="row g4 faint" style={{ fontSize: 12 }}>
+                  <Icon name="sparkle" size={12} aria-hidden />
+                  {t('approvedSource')}: {t('srcVoice')}
                 </span>
               )}
             </div>
@@ -386,6 +401,18 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                     rows={3}
                     onChange={(e) => !isApproved && setReport({ ...report, diagnosis: e.target.value })}
                   />
+                  {!isApproved && report.uncertainItems && report.uncertainItems.length > 0 && (
+                    <div className="col g4" style={{ marginTop: 8 }}>
+                      <div className="eyebrow" style={{ fontSize: 11 }}>
+                        {lang === 'pl' ? 'Wymaga weryfikacji' : 'Needs verification'}
+                      </div>
+                      {report.uncertainItems.map((item, i) => (
+                        <div key={i} className="row g6" style={{ fontSize: 12, color: 'var(--warn-fg)' }}>
+                          <span>⚠</span><span>[WYMAGA WERYFIKACJI] {item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="field-label" htmlFor="recommendations">{t('recommendations')}</label>
@@ -402,37 +429,106 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
             </div>
 
             {/* Patient explanation */}
-            {report.patientExplanation && (
+            {(report.patientExplanation || editedExplanation) && (
               <Collapse title={t('patientPanel')} sub={t('patientPanelBadge')} icon="user" defaultOpen>
                 <div style={{ padding: 16 }} className="col g12">
-                  <p style={{ fontSize: 13.5, lineHeight: 1.6, margin: 0 }}>
-                    {report.patientExplanation.plainLanguageSummary}
-                  </p>
-                  {report.patientExplanation.keyFindings.length > 0 && (
-                    <div>
-                      <div className="eyebrow" style={{ marginBottom: 8 }}>{t('keyFindings')}</div>
-                      <ul style={{ margin: 0, paddingLeft: 18 }}>
-                        {report.patientExplanation.keyFindings.map((f, i) => (
-                          <li key={i} style={{ fontSize: 13, marginBottom: 4 }}>{f}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {report.patientExplanation.nextSteps.length > 0 && (
-                    <div>
-                      <div className="eyebrow" style={{ marginBottom: 8 }}>{t('nextSteps')}</div>
-                      <ol style={{ margin: 0, paddingLeft: 18 }}>
-                        {report.patientExplanation.nextSteps.map((s, i) => (
-                          <li key={i} style={{ fontSize: 13, marginBottom: 4 }}>{s}</li>
-                        ))}
-                      </ol>
-                    </div>
-                  )}
-                  {report.patientExplanation.followUp && (
-                    <div className="row g8">
-                      <Icon name="calendar" size={15} style={{ color: 'var(--text-faint)' }} aria-hidden />
-                      <span className="muted" style={{ fontSize: 13 }}>{report.patientExplanation.followUp}</span>
-                    </div>
+                  {!isApproved && editedExplanation ? (
+                    <>
+                      <div>
+                        <label className="field-label">{lang === 'pl' ? 'Podsumowanie' : 'Summary'}</label>
+                        <textarea
+                          className="textarea"
+                          rows={4}
+                          value={editedExplanation.plainLanguageSummary}
+                          onChange={(e) =>
+                            setEditedExplanation({ ...editedExplanation, plainLanguageSummary: e.target.value })
+                          }
+                        />
+                      </div>
+                      {editedExplanation.keyFindings.length > 0 && (
+                        <div>
+                          <div className="eyebrow" style={{ marginBottom: 8 }}>{t('keyFindings')}</div>
+                          <div className="col g6">
+                            {editedExplanation.keyFindings.map((f, i) => (
+                              <input
+                                key={i}
+                                className="input"
+                                value={f}
+                                onChange={(e) => {
+                                  const updated = [...editedExplanation.keyFindings]
+                                  updated[i] = e.target.value
+                                  setEditedExplanation({ ...editedExplanation, keyFindings: updated })
+                                }}
+                                style={{ fontSize: 13 }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {editedExplanation.nextSteps.length > 0 && (
+                        <div>
+                          <div className="eyebrow" style={{ marginBottom: 8 }}>{t('nextSteps')}</div>
+                          <div className="col g6">
+                            {editedExplanation.nextSteps.map((s, i) => (
+                              <input
+                                key={i}
+                                className="input"
+                                value={s}
+                                onChange={(e) => {
+                                  const updated = [...editedExplanation.nextSteps]
+                                  updated[i] = e.target.value
+                                  setEditedExplanation({ ...editedExplanation, nextSteps: updated })
+                                }}
+                                style={{ fontSize: 13 }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div>
+                        <label className="field-label">{t('followUp')}</label>
+                        <input
+                          className="input"
+                          value={editedExplanation.followUp ?? ''}
+                          onChange={(e) =>
+                            setEditedExplanation({ ...editedExplanation, followUp: e.target.value })
+                          }
+                          style={{ fontSize: 13 }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ fontSize: 13.5, lineHeight: 1.6, margin: 0 }}>
+                        {report.patientExplanation?.plainLanguageSummary}
+                      </p>
+                      {(report.patientExplanation?.keyFindings.length ?? 0) > 0 && (
+                        <div>
+                          <div className="eyebrow" style={{ marginBottom: 8 }}>{t('keyFindings')}</div>
+                          <ul style={{ margin: 0, paddingLeft: 18 }}>
+                            {report.patientExplanation?.keyFindings.map((f, i) => (
+                              <li key={i} style={{ fontSize: 13, marginBottom: 4 }}>{f}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {(report.patientExplanation?.nextSteps.length ?? 0) > 0 && (
+                        <div>
+                          <div className="eyebrow" style={{ marginBottom: 8 }}>{t('nextSteps')}</div>
+                          <ol style={{ margin: 0, paddingLeft: 18 }}>
+                            {report.patientExplanation?.nextSteps.map((s, i) => (
+                              <li key={i} style={{ fontSize: 13, marginBottom: 4 }}>{s}</li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+                      {report.patientExplanation?.followUp && (
+                        <div className="row g8">
+                          <Icon name="calendar" size={15} style={{ color: 'var(--text-faint)' }} aria-hidden />
+                          <span className="muted" style={{ fontSize: 13 }}>{report.patientExplanation.followUp}</span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </Collapse>

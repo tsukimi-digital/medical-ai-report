@@ -42,6 +42,7 @@ function FindingRow({
   const [text, setText] = useState(f.text)
   const [editLoc, setEditLoc] = useState(false)
   const [loc, setLoc] = useState(f.anatomicalLocation)
+  const [isModified, setIsModified] = useState(false)
 
   const hasEvidence =
     f.evidence &&
@@ -73,6 +74,20 @@ function FindingRow({
               <ConfBadge level={f.confidence} lang={lang} />
               <Icon name="chevD" size={11} style={{ opacity: 0.5 }} aria-hidden />
             </button>
+          )}
+          {isModified && (
+            <span
+              className="chip chip-edited"
+              style={{
+                backgroundColor: 'var(--warn-bg)',
+                color: 'var(--warn-fg)',
+                fontSize: 10,
+                padding: '1px 6px',
+                borderRadius: 4,
+              }}
+            >
+              {lang === 'en' ? 'edited ✎' : 'zmodyfikowane ✎'}
+            </span>
           )}
           {readonly ? (
             <span className={`chip ${f.isDeviation ? 'chip-dev' : 'chip-norm'}`}>
@@ -154,7 +169,10 @@ function FindingRow({
           onChange={(e) => setText(e.target.value)}
           onBlur={() => {
             setEditing(false)
-            if (text !== f.text) onUpdate?.(f.id!, { text })
+            if (text !== f.text) {
+              setIsModified(true)
+              onUpdate?.(f.id!, { text })
+            }
           }}
           aria-label={lang === 'en' ? 'Edit finding text' : 'Edytuj treść znaleziska'}
         />
