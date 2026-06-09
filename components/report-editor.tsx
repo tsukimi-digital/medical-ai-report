@@ -10,13 +10,14 @@ type ReportEditorProps = {
   onChange: (updated: RadiologicalReport | MedicalReport) => void
   readonly?: boolean
   lang?: 'pl' | 'en'
+  onEvidence?: (f: Finding) => void
 }
 
 function isRadReport(r: RadiologicalReport | MedicalReport): r is RadiologicalReport {
   return 'radiologistId' in r
 }
 
-export function ReportEditor({ report, onChange, readonly, lang = 'pl' }: ReportEditorProps) {
+export function ReportEditor({ report, onChange, readonly, lang = 'pl', onEvidence }: ReportEditorProps) {
   const t = (pl: string, en: string) => (lang === 'en' ? en : pl)
 
   const handleFindingUpdate = (id: string, patch: Partial<Finding>) => {
@@ -47,6 +48,7 @@ export function ReportEditor({ report, onChange, readonly, lang = 'pl' }: Report
             readonly={readonly}
             onUpdate={readonly ? undefined : handleFindingUpdate}
             onRemove={readonly ? undefined : handleFindingRemove}
+            onEvidence={onEvidence}
           />
         </div>
 
@@ -67,6 +69,7 @@ export function ReportEditor({ report, onChange, readonly, lang = 'pl' }: Report
               lang={lang}
               readonly={readonly}
               label="low"
+              onEvidence={onEvidence}
             />
           </div>
         )}

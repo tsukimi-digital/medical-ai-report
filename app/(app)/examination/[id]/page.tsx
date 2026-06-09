@@ -121,6 +121,16 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
               {isApproved && report.approvedByName && (
                 <span>{lang === 'pl' ? `zatwierdził(a): ${report.approvedByName}` : `approved by: ${report.approvedByName}`}</span>
               )}
+              {isApproved && report.analysisMode && (
+                <span className="row g4">
+                  <Icon name="sparkle" size={12} aria-hidden />
+                  {t('approvedSource')}: {
+                    report.analysisMode === 'image' ? t('srcImage') :
+                    report.analysisMode === 'voice' ? t('srcVoice') :
+                    t('srcMulti')
+                  }
+                </span>
+              )}
             </div>
           </div>
 
@@ -191,6 +201,7 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
                   onChange={(updated) => setReport(updated as RadiologicalReport)}
                   readonly={isApproved && !manualMode}
                   lang={lang}
+                  onEvidence={(f) => { setEvidenceFinding(f); setShowEvidenceModal(true) }}
                 />
               </div>
             </div>
@@ -270,10 +281,40 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
                   {t('forPatient')}
                 </div>
                 {report.patientExplanation ? (
-                  <div className="col g10">
+                  <div className="col g12">
                     <p style={{ fontSize: 13, lineHeight: 1.6, margin: 0 }}>
                       {report.patientExplanation.plainLanguageSummary}
                     </p>
+                    {report.patientExplanation.keyFindings.length > 0 && (
+                      <div>
+                        <div className="eyebrow" style={{ marginBottom: 8 }}>
+                          {lang === 'pl' ? 'Kluczowe wyniki' : 'Key findings'}
+                        </div>
+                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                          {report.patientExplanation.keyFindings.map((f, i) => (
+                            <li key={i} style={{ fontSize: 13, marginBottom: 4 }}>{f}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {report.patientExplanation.nextSteps.length > 0 && (
+                      <div>
+                        <div className="eyebrow" style={{ marginBottom: 8 }}>
+                          {lang === 'pl' ? 'Co dalej' : 'Next steps'}
+                        </div>
+                        <ol style={{ margin: 0, paddingLeft: 18 }}>
+                          {report.patientExplanation.nextSteps.map((s, i) => (
+                            <li key={i} style={{ fontSize: 13, marginBottom: 4 }}>{s}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                    {report.patientExplanation.followUp && (
+                      <div className="row g8">
+                        <Icon name="calendar" size={15} style={{ color: 'var(--text-faint)' }} aria-hidden />
+                        <span className="muted" style={{ fontSize: 13 }}>{report.patientExplanation.followUp}</span>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <Btn

@@ -5,10 +5,12 @@
 - [x] tailwind.config.ts + postcss.config.js
 - [x] .env.example
 - [x] app/globals.css + app/layout.tsx
+- [x] app/page.tsx (root redirect → /dashboard)
 - [x] lib/types.ts (kompletne typy)
 - [x] docs/api-contract.md
 - [x] docs/PROGRESS.md
 - [x] Pliki placeholder
+- [x] Pliki prototypu (handoff): app/screens/, app/shell.jsx, components/ui.jsx, lib/data.jsx, lib/device.jsx, lib/i18n.jsx
 
 ## Faza 1 — UI (FE: Yuki Sato)
 - [x] app/(auth)/login/page.tsx
@@ -21,7 +23,7 @@
 - [x] app/(app)/examination/[id]/page.tsx
 - [x] app/(app)/visit/page.tsx
 - [x] app/(app)/visit/[id]/page.tsx
-- [x] components/ui/* (design system: icon, button, badge, modal, banner, collapse, combobox)
+- [x] components/ui/* (design system: icon, button, badge, modal, banner, collapse, combobox, toast)
 - [x] components/voice-recorder.tsx
 - [x] components/image-uploader.tsx
 - [x] components/examination-context-fields.tsx
@@ -39,7 +41,7 @@
 - [x] Testy jednostkowe FE (30 testów — i18n, api-client, validation, badge)
 
 ## Faza 2a — Auth + dane (BE1: Kenji Mori)
-- [x] middleware.ts
+- [x] middleware.ts (ochrona /(app)/*)
 - [x] lib/auth.ts
 - [x] app/api/auth/login/route.ts
 - [x] app/api/auth/logout/route.ts
@@ -97,6 +99,8 @@
 - [x] lib/examination-types.ts: osobny plik per spec (re-export z lib/types.ts)
 
 ## Faza 5 — QA (Mei Nakamura) — po merge Fazy 3 i 4
+- [x] tests/setup.ts (vitest global setup)
+- [x] tests/e2e/helpers/auth.ts (helper loginViaApi do testów e2e)
 - [x] tests/e2e/login.spec.ts
 - [x] tests/e2e/case-a.spec.ts (USG tarczycy, image→TI-RADS 4)
 - [x] tests/e2e/case-b.spec.ts (USG jamy brzusznej, voice→korekta)
@@ -104,6 +108,20 @@
 - [x] tests/e2e/case-d.spec.ts (suboptimal banner + Wymaga weryfikacji)
 - [x] tests/e2e/dashboard.spec.ts (radiolog + lekarz dashboard)
 - [x] tests/e2e/navigation.spec.ts (navbar, disclaimer, lang toggle, logout, keyboard)
+
+## Faza 6 — Poprawki po audycie QA cross-verification (FE + BE2)
+
+### Zidentyfikowane przez: 4 agentów QA (Weryfikator 1-3 + Frontend UX QA)
+
+#### HIGH — Braki blokujące demo
+- [x] **Evidence Viewer osiągalny** — dodać prop `onEvidence` do `ReportEditorProps` w `components/report-editor.tsx` + przekazać do `FindingsList`; w `examination/[id]/page.tsx` podłączyć callback `setEvidenceFinding` + `setShowEvidenceModal`
+- [x] **Nowa wizyta — selektor pacjenta i raportu radiologicznego** — `app/(app)/visit/[id]/page.tsx`: dodać `PatientSelector` + `ReportSelector` przed VoiceRecorder gdy isNew; usunąć hardkodowany `patients[0]` z `handleVoiceRecording`
+- [x] **Limit pliku 5 MB → 10 MB** — `components/image-uploader.tsx` (MAX_SIZE + hint) + `app/api/ai/analyze-image/route.ts` (serwer) — zgodnie ze spec (realne pliki USG)
+
+#### MED — Przed prezentacją klientowi
+- [x] **Patient Explanation w raporcie radiologicznym — pełny widok** — `examination/[id]/page.tsx`: dodać `keyFindings[]`, `nextSteps[]`, `followUp` (analogicznie jak w `visit/[id]`)
+- [x] **Sidebar z raportem radiologicznym w wizycie lekarza** — `visit/[id]/page.tsx`: gdy `report.radiologicalReportId` — fetch + `Collapse` z findings + impression
+- [x] **Approval badge proweniencji AI** — `examination/[id]/page.tsx`: po zatwierdzeniu pokazuje "Źródło AI: zdjęcia USG / nagranie głosowe / multimodal" (używa istniejących kluczy i18n: `approvedSource`, `srcImage`, `srcVoice`, `srcMulti`)
 
 ## Faza 5b — QA Update post-integration (Mei Nakamura)
 - [x] Bug fix: auth.ts loginViaApi → używa formularza logowania (ustawia in-memory sessionUser)

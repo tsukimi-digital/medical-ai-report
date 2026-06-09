@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
   }
 
   for (const file of imageFiles) {
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: `Image ${file.name} exceeds 5 MB limit` }, { status: 400 })
+    if (file.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: `Image ${file.name} exceeds 10 MB limit` }, { status: 400 })
     }
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
     if (!allowedTypes.includes(file.type)) {
