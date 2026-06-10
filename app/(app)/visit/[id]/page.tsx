@@ -33,6 +33,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
   const [transcribing, setTranscribing] = useState(false)
   const [rawTranscription, setRawTranscription] = useState<string | null>(null)
   const [isProcessingReport, setIsProcessingReport] = useState(false)
+  const [structuringDone, setStructuringDone] = useState(false)
 
   // New-visit patient & rad report selection
   const [allPatients, setAllPatients] = useState<Patient[]>([])
@@ -76,6 +77,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
     setTranscribing(true)
     setRawTranscription(null)
     setIsProcessingReport(false)
+    setStructuringDone(false)
     try {
       // Phase 1: transcribe immediately
       const { transcription } = await apiClient.transcribeAudio(blob, lang)
@@ -110,6 +112,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
             transcription,
           }).catch(() => null), // non-fatal
         ])
+        setStructuringDone(true)
 
         const { report: updated } = await apiClient.updateMedReport(created.id, {
           ...(draft as Partial<MedicalReport>),
@@ -136,6 +139,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
             transcription,
           }).catch(() => null),
         ])
+        setStructuringDone(true)
 
         const { report: updated } = await apiClient.updateMedReport(report.id, {
           ...(draft as Partial<MedicalReport>),
@@ -356,7 +360,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                 <GenerationProgress
                   steps={[
                     { label: t('stepTranscription'), done: !transcribing },
-                    { label: t('stepStructuring'), done: false },
+                    { label: t('stepStructuring'), done: structuringDone },
                   ]}
                 />
                 {rawTranscription !== null && (
@@ -376,10 +380,19 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
           </div>
         )}
 
-        {/* Medical report form + patient draft — two columns like the prototype */}
+        {/* Medical report form + patient draft — two columns like the prototype.
+            Without a patient explanation the grid collapses to one column
+            so no empty cell is rendered. */}
         {report && (
           <div className="col g20">
-            <div className="visit-grid">
+            <div
+              className="visit-grid"
+              style={
+                report.patientExplanation || editedExplanation
+                  ? undefined
+                  : { gridTemplateColumns: '1fr' }
+              }
+            >
             <div className="card" style={{ overflow: 'hidden' }}>
               <div className="row g8" style={{ padding: '13px 16px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
                 <Icon name="stetho" size={17} style={{ color: 'var(--accent-700)' }} aria-hidden />
