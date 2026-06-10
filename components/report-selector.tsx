@@ -17,11 +17,13 @@ export function ReportSelector({
   value,
   onChange,
   reports,
-  placeholder = 'Wybierz raport radiologiczny…',
-  emptyText = 'Brak raportów',
+  placeholder,
+  emptyText,
   lang = 'pl',
   disabled,
 }: ReportSelectorProps) {
+  const ph = placeholder ?? (lang === 'en' ? 'Select a radiology report…' : 'Wybierz raport radiologiczny…')
+  const empty = emptyText ?? (lang === 'en' ? 'No reports' : 'Brak raportów')
   const getLabel = (r: RadiologicalReport) =>
     `${r.examinationType} — ${new Date(r.createdAt).toLocaleDateString(lang === 'en' ? 'en-GB' : 'pl-PL')}`
 
@@ -40,10 +42,10 @@ export function ReportSelector({
       value={value}
       onChange={onChange}
       options={reports}
-      placeholder={placeholder}
+      placeholder={ph}
       getLabel={getLabel}
       render={renderReport}
-      emptyText={emptyText}
+      emptyText={empty}
       disabled={disabled}
     />
   )

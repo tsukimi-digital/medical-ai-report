@@ -18,11 +18,13 @@ export function PatientSelector({
   value,
   onChange,
   patients,
-  placeholder = 'Szukaj po nazwisku lub PESEL…',
-  emptyText = 'Brak wyników',
+  placeholder,
+  emptyText,
   lang = 'pl',
   disabled,
 }: PatientSelectorProps) {
+  const ph = placeholder ?? (lang === 'en' ? 'Search by last name or PESEL…' : 'Szukaj po nazwisku lub PESEL…')
+  const empty = emptyText ?? (lang === 'en' ? 'No results' : 'Brak wyników')
   const getLabel = (p: Patient) => `${p.firstName} ${p.lastName} ${p.pesel}`
 
   const renderPatient = (p: Patient) => (
@@ -44,10 +46,10 @@ export function PatientSelector({
       value={value}
       onChange={onChange}
       options={patients}
-      placeholder={placeholder}
+      placeholder={ph}
       getLabel={(p) => `${p.firstName} ${p.lastName}`}
       render={renderPatient}
-      emptyText={emptyText}
+      emptyText={empty}
       disabled={disabled}
     />
   )

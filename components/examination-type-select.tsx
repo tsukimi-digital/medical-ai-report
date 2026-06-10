@@ -37,11 +37,13 @@ const DATA_EN: Record<string, string> = {
 export function ExaminationTypeSelect({
   value,
   onChange,
-  placeholder = 'Wybierz lub wpisz typ badania…',
-  emptyText = 'Brak wyników',
+  placeholder,
+  emptyText,
   lang = 'pl',
   disabled,
 }: ExamTypeSelectorProps) {
+  const ph = placeholder ?? (lang === 'en' ? 'Select or type an examination type…' : 'Wybierz lub wpisz typ badania…')
+  const empty = emptyText ?? (lang === 'en' ? 'No results' : 'Brak wyników')
   const getLabel = (t: string) => (lang === 'en' ? (DATA_EN[t] ?? t) : t)
 
   return (
@@ -49,10 +51,10 @@ export function ExaminationTypeSelect({
       value={value}
       onChange={onChange}
       options={EXAM_TYPE_LIST}
-      placeholder={placeholder}
+      placeholder={ph}
       getLabel={getLabel}
       render={getLabel}
-      emptyText={emptyText}
+      emptyText={empty}
       disabled={disabled}
     />
   )

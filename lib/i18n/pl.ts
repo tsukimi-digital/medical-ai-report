@@ -195,6 +195,8 @@ export const pl = {
   recReady: 'Nagranie gotowe',
   recSend: 'Wyślij do transkrypcji',
   recReset: 'Nagraj ponownie',
+  recPreview: 'Podgląd nagrania',
+  micError: 'Brak dostępu do mikrofonu. Sprawdź uprawnienia w przeglądarce.',
   priorSurgery: 'Przebyte zabiegi',
   patientAge: 'lat',
   female: 'kobieta',
@@ -213,6 +215,11 @@ export const pl = {
   peselInvalid: 'PESEL musi mieć 11 cyfr',
   patientReports: 'Badania pacjenta',
   backToPatients: 'Pacjenci',
+
+  // a11y labels
+  ariaHome: 'Sonara — strona główna',
+  ariaMainNav: 'Nawigacja główna',
+  ariaLanguage: 'Język interfejsu',
 } as const
 
 export type TranslationKeys = keyof typeof pl

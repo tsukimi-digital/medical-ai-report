@@ -278,6 +278,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                   onChange={setSelectedPatient}
                   patients={allPatients}
                   placeholder={t('selectPatientPh')}
+                  emptyText={t('noResults')}
                   lang={lang}
                 />
               </div>

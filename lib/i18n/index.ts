@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 import { pl } from './pl'
 import { en } from './en'
 
@@ -58,11 +58,36 @@ export function getDict(lang: Lang): I18nDict {
 }
 
 /**
+ * Module-level language store shared by every useI18n() consumer.
+ * A plain useState inside the hook would give each component its own
+ * isolated lang — the navbar toggle would never reach page content.
+ */
+let currentLang: Lang = 'pl'
+const langListeners = new Set<() => void>()
+
+function subscribeLang(listener: () => void): () => void {
+  langListeners.add(listener)
+  return () => langListeners.delete(listener)
+}
+
+function getLangSnapshot(): Lang {
+  return currentLang
+}
+
+export function setGlobalLang(lang: Lang): void {
+  if (lang === currentLang) return
+  currentLang = lang
+  langListeners.forEach((fn) => fn())
+}
+
+/**
  * React hook for language state + translation function.
+ * Language is global — changing it anywhere updates every subscribed component.
  * Usage: const { lang, setLang, t, L: translate } = useI18n()
  */
 export function useI18n() {
-  const [lang, setLang] = useState<Lang>('pl')
+  const lang = useSyncExternalStore(subscribeLang, getLangSnapshot, getLangSnapshot)
+  const setLang = useCallback((l: Lang) => setGlobalLang(l), [])
   const dict = getDict(lang)
 
   const t = useCallback(

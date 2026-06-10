@@ -194,6 +194,8 @@ export const en = {
   recReady: 'Recording ready',
   recSend: 'Send for transcription',
   recReset: 'Record again',
+  recPreview: 'Recording preview',
+  micError: 'Microphone access denied. Check your browser permissions.',
   priorSurgery: 'Prior surgery',
   patientAge: 'y/o',
   female: 'female',
@@ -212,4 +214,9 @@ export const en = {
   peselInvalid: 'National ID must be 11 digits',
   patientReports: 'Patient reports',
   backToPatients: 'Patients',
+
+  // a11y labels
+  ariaHome: 'Sonara — home',
+  ariaMainNav: 'Main navigation',
+  ariaLanguage: 'Interface language',
 } as const

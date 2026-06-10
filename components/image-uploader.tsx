@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback } from 'react'
 import { Icon } from './ui/icon'
+import { useI18n } from '@/lib/i18n/index'
 
 type ImageUploaderProps = {
   onFiles: (files: File[]) => void
@@ -21,10 +22,14 @@ export function ImageUploader({
   disabled,
   maxFiles = MAX_FILES,
   maxSizeBytes = MAX_SIZE,
-  label = 'Obrazy USG',
-  hint = 'Przeciągnij i upuść — max 5 plików, do 10 MB każdy',
-  uploadCta = 'Wybierz pliki',
+  label: labelProp,
+  hint: hintProp,
+  uploadCta: uploadCtaProp,
 }: ImageUploaderProps) {
+  const { lang, t } = useI18n()
+  const label = labelProp ?? t('uploadImages')
+  const hint = hintProp ?? t('uploadHint')
+  const uploadCta = uploadCtaProp ?? t('uploadCta')
   const inputRef = useRef<HTMLInputElement>(null)
   const [previews, setPreviews] = useState<{ url: string; name: string }[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -35,24 +40,33 @@ export function ImageUploader({
       setError(null)
       const arr = Array.from(files)
       if (arr.length > maxFiles) {
-        setError(`Maksymalnie ${maxFiles} pliki.`)
+        setError(lang === 'en' ? `Maximum ${maxFiles} files.` : `Maksymalnie ${maxFiles} plików.`)
         return
       }
       const oversized = arr.find((f) => f.size > maxSizeBytes)
       if (oversized) {
-        setError(`Plik „${oversized.name}" przekracza ${maxSizeBytes / 1024 / 1024} MB.`)
+        const mb = maxSizeBytes / 1024 / 1024
+        setError(
+          lang === 'en'
+            ? `File "${oversized.name}" exceeds ${mb} MB.`
+            : `Plik „${oversized.name}" przekracza ${mb} MB.`,
+        )
         return
       }
       const notImage = arr.find((f) => !f.type.startsWith('image/'))
       if (notImage) {
-        setError(`Plik „${notImage.name}" nie jest obrazem.`)
+        setError(
+          lang === 'en'
+            ? `File "${notImage.name}" is not an image.`
+            : `Plik „${notImage.name}" nie jest obrazem.`,
+        )
         return
       }
       const urls = arr.map((f) => ({ url: URL.createObjectURL(f), name: f.name }))
       setPreviews(urls)
       onFiles(arr)
     },
-    [maxFiles, maxSizeBytes, onFiles],
+    [maxFiles, maxSizeBytes, onFiles, lang],
   )
 
   const handleDrop = useCallback(
@@ -138,7 +152,7 @@ export function ImageUploader({
               />
               <button
                 type="button"
-                aria-label={`Usuń ${p.name}`}
+                aria-label={`${t('remove')} ${p.name}`}
                 style={{
                   position: 'absolute',
                   top: 3,
