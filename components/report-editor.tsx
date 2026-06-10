@@ -94,7 +94,7 @@ export function ReportEditor({ report, onChange, readonly, lang = 'pl', onEviden
         <div>
           <label className="field-label" htmlFor="limitations">
             {t('Ograniczenia badania', 'Imaging limitations')}
-            <span className="opt"> ({t('opcjonalne', 'optional')})</span>
+            <span className="opt"> · {t('opcjonalne', 'optional')}</span>
           </label>
           <textarea
             id="limitations"
@@ -111,7 +111,7 @@ export function ReportEditor({ report, onChange, readonly, lang = 'pl', onEviden
         <div>
           <label className="field-label" htmlFor="recommendations">
             {t('Zalecenia', 'Recommendations')}
-            <span className="opt"> ({t('opcjonalne', 'optional')})</span>
+            <span className="opt"> · {t('opcjonalne', 'optional')}</span>
           </label>
           <textarea
             id="recommendations"

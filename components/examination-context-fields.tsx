@@ -91,7 +91,7 @@ export function ExaminationContextFields({
           <div>
             <label className="field-label" htmlFor="lab-values">
               {t('Wartości lab. ze skierowania', 'Lab values from referral')}
-              <span className="opt"> ({t('opcjonalne', 'optional')})</span>
+              <span className="opt"> · {t('opcjonalne', 'optional')}</span>
             </label>
             <input
               id="lab-values"
@@ -121,7 +121,7 @@ export function ExaminationContextFields({
           <div>
             <label className="field-label" htmlFor="prior-surgery">
               {t('Przebyte zabiegi', 'Prior surgery')}
-              <span className="opt"> ({t('opcjonalne', 'optional')})</span>
+              <span className="opt"> · {t('opcjonalne', 'optional')}</span>
             </label>
             <input
               id="prior-surgery"
