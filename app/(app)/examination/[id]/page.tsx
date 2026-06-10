@@ -20,7 +20,7 @@ import type { RadiologicalReport, Finding, Patient } from '@/lib/types'
 
 export default function ExaminationDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const { lang, t } = useI18n()
+  const { lang, t, L } = useI18n()
 
   const [report, setReport] = useState<RadiologicalReport | null>(null)
   const [patient, setPatient] = useState<Patient | null>(null)
@@ -103,81 +103,97 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
           {t('backToDash')}
         </Link>
 
-        <div className="row between wrap g16" style={{ marginBottom: 20 }}>
-          <div>
-            <div className="row g10" style={{ marginBottom: 6 }}>
-              <h1 className="h-page">{report.examinationType}</h1>
-              {report.caseKey && (
-                <span className="badge badge-accent badge-sq mono" style={{ fontWeight: 700 }}>
-                  CASE {report.caseKey}
-                </span>
-              )}
-              {isApproved && (
-                <span className="badge badge-approved">
-                  <span className="dot" aria-hidden />
-                  {t('statusApproved')}
-                </span>
-              )}
-              {!isApproved && report.aiGenerated && (
-                <span className="badge badge-ai">
-                  <Icon name="sparkle" size={11} aria-hidden />
-                  {t('aiDraftBadge')}
-                </span>
-              )}
+        <div className="row between wrap g16" style={{ marginBottom: 16 }}>
+          <div className="row g12">
+            <div className="avatar" style={{ width: 42, height: 42, fontSize: 15 }} aria-hidden>
+              {patient ? `${patient.firstName[0]}${patient.lastName[0]}` : ''}
             </div>
-
-            {/* Patient info row */}
-            {patient && (
-              <div className="row g10 wrap" style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>
-                <span style={{ fontWeight: 600, color: 'var(--text)' }}>
-                  {patient.firstName} {patient.lastName}
-                </span>
-                <span className="faint">·</span>
-                <span className="faint mono" style={{ fontSize: 12 }}>{patient.pesel}</span>
-                <span className="faint">·</span>
-                <span className="faint">{patient.age} {lang === 'pl' ? 'lat' : 'yo'}, {patient.gender === 'F' ? (lang === 'pl' ? 'K' : 'F') : 'M'}</span>
+            <div>
+              <div className="row g10 wrap">
+                <h1 className="h-page" style={{ fontSize: 20 }}>
+                  {patient ? `${patient.firstName} ${patient.lastName}` : L(report.examinationType)}
+                </h1>
+                {report.caseKey && (
+                  <span className="badge badge-accent badge-sq mono" style={{ fontWeight: 700 }}>
+                    CASE {report.caseKey}
+                  </span>
+                )}
+                {isApproved && (
+                  <span className="badge badge-approved">
+                    <span className="dot" aria-hidden />
+                    {t('statusApproved')}
+                  </span>
+                )}
+                {!isApproved && report.aiGenerated && (
+                  <span className="badge badge-ai">
+                    <Icon name="sparkle" size={11} aria-hidden />
+                    {t('aiDraftBadge')}
+                  </span>
+                )}
               </div>
-            )}
-
-            <div className="faint row g8" style={{ fontSize: 12.5 }}>
-              {report.analysisMode && (
-                <span className="row g4">
-                  <Icon name={report.analysisMode === 'image' ? 'image' : report.analysisMode === 'voice' ? 'mic' : 'layers'} size={13} aria-hidden />
-                  {lang === 'pl'
-                    ? { image: 'zdjęcie', voice: 'głos', multimodal: 'multimodal' }[report.analysisMode]
-                    : { image: 'image', voice: 'voice', multimodal: 'multimodal' }[report.analysisMode]}
-                </span>
-              )}
-              <span>{new Date(report.createdAt).toLocaleDateString(lang === 'pl' ? 'pl-PL' : 'en-GB')}</span>
-              {isApproved && report.approvedByName && (
-                <span>{lang === 'pl' ? `zatwierdził(a): ${report.approvedByName}` : `approved by: ${report.approvedByName}`}</span>
-              )}
-              {isApproved && report.analysisMode && (
-                <span className="row g4">
-                  <Icon name="sparkle" size={12} aria-hidden />
-                  {t('approvedSource')}: {
-                    report.analysisMode === 'image' ? t('srcImage') :
-                    report.analysisMode === 'voice' ? t('srcVoice') :
-                    t('srcMulti')
-                  }
-                </span>
-              )}
+              <div className="faint" style={{ fontSize: 12.5 }}>
+                {L(report.examinationType)}
+                {patient && (
+                  <>
+                    {' '}· {patient.age} {t('patientAge')} · {patient.gender === 'F' ? t('female') : t('male')} ·{' '}
+                    <span className="mono">{patient.pesel}</span>
+                  </>
+                )}
+              </div>
+              <div className="faint row g8 wrap" style={{ fontSize: 12.5, marginTop: 2 }}>
+                {report.analysisMode && (
+                  <span className="row g4">
+                    <Icon name={report.analysisMode === 'image' ? 'image' : report.analysisMode === 'voice' ? 'mic' : 'layers'} size={13} aria-hidden />
+                    {lang === 'pl'
+                      ? { image: 'zdjęcie', voice: 'głos', multimodal: 'multimodal' }[report.analysisMode]
+                      : { image: 'image', voice: 'voice', multimodal: 'multimodal' }[report.analysisMode]}
+                  </span>
+                )}
+                <span>{new Date(report.createdAt).toLocaleDateString(lang === 'pl' ? 'pl-PL' : 'en-GB')}</span>
+                {isApproved && report.approvedByName && (
+                  <span>{lang === 'pl' ? `zatwierdził(a): ${report.approvedByName}` : `approved by: ${report.approvedByName}`}</span>
+                )}
+                {isApproved && report.analysisMode && (
+                  <span className="row g4">
+                    <Icon name="sparkle" size={12} aria-hidden />
+                    {t('approvedSource')}: {
+                      report.analysisMode === 'image' ? t('srcImage') :
+                      report.analysisMode === 'voice' ? t('srcVoice') :
+                      t('srcMulti')
+                    }
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          {!isApproved && (
-            <Btn
-              variant="primary"
-              size="lg"
-              icon="check"
-              disabled={!canApprove}
-              title={!canApprove ? t('approveDisabled') : ''}
-              onClick={() => setShowApproveModal(true)}
-              type="button"
-            >
-              {t('approve')}
-            </Btn>
-          )}
+          <div className="row g10">
+            {report.classification && (
+              <div className="panel row g8" style={{ padding: '7px 12px', background: 'var(--accent-tint)', borderColor: 'var(--accent-tint-2)', whiteSpace: 'nowrap' }}>
+                <Icon name="target" size={16} style={{ color: 'var(--accent-800)', flex: 'none' }} aria-hidden />
+                <div>
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--accent-800)', fontWeight: 600 }}>{report.classification.name}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-800)' }}>
+                    {report.classification.value}{' '}
+                    <span style={{ fontWeight: 400, fontSize: 11.5 }}>· {L(report.classification.label)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {!isApproved && (
+              <Btn
+                variant="primary"
+                size="lg"
+                icon="check"
+                disabled={!canApprove}
+                title={!canApprove ? t('approveDisabled') : ''}
+                onClick={() => setShowApproveModal(true)}
+                type="button"
+              >
+                {t('approve')}
+              </Btn>
+            )}
+          </div>
         </div>
 
         {/* AI provenance banner */}
@@ -239,7 +255,7 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
               <div>
                 <label className="field-label" htmlFor="clinicalIndication">
                   {lang === 'pl' ? 'Wskazanie kliniczne' : 'Clinical indication'}
-                  {!isApproved && <span className="opt"> ({lang === 'pl' ? 'opcjonalne' : 'optional'})</span>}
+                  {!isApproved && <span className="opt"> · {t('optional')}</span>}
                 </label>
                 {isApproved ? (
                   <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: report.clinicalIndication ? 'var(--text)' : 'var(--text-faint)' }}>
@@ -260,7 +276,7 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
               <div>
                 <label className="field-label" htmlFor="radComments">
                   {lang === 'pl' ? 'Komentarz radiologa' : 'Radiologist comment'}
-                  {!isApproved && <span className="opt"> ({lang === 'pl' ? 'opcjonalne' : 'optional'})</span>}
+                  {!isApproved && <span className="opt"> · {t('optional')}</span>}
                 </label>
                 {isApproved ? (
                   <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: report.comments ? 'var(--text)' : 'var(--text-faint)' }}>
@@ -400,9 +416,12 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
                         <div className="eyebrow" style={{ marginBottom: 8 }}>
                           {lang === 'pl' ? 'Kluczowe wyniki' : 'Key findings'}
                         </div>
-                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                        <ul className="col g8" style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                           {report.patientExplanation.keyFindings.map((f, i) => (
-                            <li key={i} style={{ fontSize: 13, marginBottom: 4 }}>{f}</li>
+                            <li key={i} className="row g10">
+                              <Icon name="dot" size={9} style={{ color: 'var(--accent-600)', flex: 'none', marginTop: 6 }} aria-hidden />
+                              <span style={{ fontSize: 13 }}>{f}</span>
+                            </li>
                           ))}
                         </ul>
                       </div>
@@ -412,9 +431,12 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
                         <div className="eyebrow" style={{ marginBottom: 8 }}>
                           {lang === 'pl' ? 'Co dalej' : 'Next steps'}
                         </div>
-                        <ol style={{ margin: 0, paddingLeft: 18 }}>
+                        <ol className="col g8" style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                           {report.patientExplanation.nextSteps.map((s, i) => (
-                            <li key={i} style={{ fontSize: 13, marginBottom: 4 }}>{s}</li>
+                            <li key={i} className="row g10">
+                              <span aria-hidden style={{ width: 20, height: 20, borderRadius: 99, background: 'var(--accent-tint)', color: 'var(--accent-800)', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', marginTop: 1 }}>{i + 1}</span>
+                              <span style={{ fontSize: 13 }}>{s}</span>
+                            </li>
                           ))}
                         </ol>
                       </div>
