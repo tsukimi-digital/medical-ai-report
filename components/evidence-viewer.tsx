@@ -14,16 +14,22 @@ function UsgThumb({
   idx,
   label,
   lit,
+  lang,
 }: {
   idx: number
   label: string
   lit?: boolean
+  lang: 'pl' | 'en'
 }) {
+  const ariaLabel =
+    lang === 'en'
+      ? `Image ${idx + 1}${lit ? ' (finding source)' : ''}`
+      : `Obraz ${idx + 1}${lit ? ' (źródło znaleziska)' : ''}`
   return (
     <div
       className={`usg-thumb${lit ? ' lit' : ''}`}
       style={{ width: 78, height: 60 }}
-      aria-label={`${lang}: Image ${idx + 1}${lit ? ' (referenced)' : ''}`}
+      aria-label={ariaLabel}
     >
       <span className="usg-idx">{String(idx + 1).padStart(2, '0')}</span>
       <span className="usg-label">
@@ -33,11 +39,7 @@ function UsgThumb({
   )
 }
 
-// eslint-disable-next-line prefer-const
-let lang = 'pl'
-
 export function EvidenceViewer({ finding, imageLabel, imageCount = 0, lang: langProp = 'pl' }: EvidenceViewerProps) {
-  lang = langProp
   if (!finding) return null
 
   const ev = finding.evidence ?? {}
@@ -70,7 +72,7 @@ export function EvidenceViewer({ finding, imageLabel, imageCount = 0, lang: lang
           <div className="row g8 wrap" role="list" aria-label={langProp === 'en' ? 'Ultrasound images' : 'Obrazy USG'}>
             {Array.from({ length: total }).map((_, i) => (
               <div key={i} role="listitem">
-                <UsgThumb idx={i} label={imageLabel} lit={imgs.includes(i)} />
+                <UsgThumb idx={i} label={imageLabel} lit={imgs.includes(i)} lang={langProp} />
               </div>
             ))}
           </div>

@@ -158,3 +158,18 @@
 - [x] **examination/[id] — Dane badania card** — textarea clinicalIndication + radComments, edytowalne w draft (PUT na onBlur), readonly w approved
 - [x] **examination/[id] — AI provenance banner** — "Wygenerowane przez AI — wymaga weryfikacji" (draft) / approver + timestamp + source (approved)
 - [x] **visit/[id] — add/remove patient explanation items** — "Kluczowe wyniki" + "Co dalej": przyciski Usuń punkt/krok + Dodaj punkt/krok + empty-state message
+
+## Faza 8 — Design parity: różnice strukturalne vs prototyp (FE: Yuki Sato) — fix/fe-design-parity
+
+Źródło prawdy: `docs/prototype/Sonara - Medical AI.html`. Audyt orkiestratora 2026-06-10.
+
+### FE (Yuki Sato) — fix/fe-design-parity
+- [x] **Tokeny CSS w :root + zielony banner zatwierdzenia + toast językowy** — commit b489687 (naprawa stylów z audytu wizualnego)
+- [x] **Panel klasyfikacji (ACR TI-RADS/O-RADS)** — `examination/[id]/page.tsx`: panel accent-tint z ikoną target w nagłówku (prawa strona) gdy `report.classification` — name (mono) + value + label, jak prototyp ~l.2170
+- [x] **Nagłówek pacjenta jak w prototypie** — `examination/[id]/page.tsx`: avatar 42px + "Imię Nazwisko" jako tytuł (h-page 20px) + CaseChip; pod spodem meta: typ badania · wiek · płeć · PESEL (mono) — prototyp ~l.2155-2168
+- [x] **Klasyfikacja w karcie kontekstu radiologicznego wizyty** — `visit/[id]/page.tsx` (RadContext): pokazać `classification` gdy istnieje — prototyp RadContextCard
+- [x] **Wizyta: 2 kolumny (notatka medyczna ↔ wersja dla pacjenta)** — `visit/[id]/page.tsx`: użyć `.visit-grid`; w prototypie lewa kolumna = formularz medyczny, prawa = patient draft panel — prototyp VisitFlow/PatientDraft
+- [x] **UI postępu generacji** — `examination/new/page.tsx` + `visit/[id]`: kroki pipeline (np. Vision Extract → Generowanie raportu → Quality Review wg trybu) z `.pline` progress + aktywny krok, podczas realnych wywołań API — prototyp ExamFlow generation sim
+- [x] **Markery list w wersji dla pacjenta** — `visit/[id]` + `examination/[id]`: kropki (•) dla kluczowych wyników, numerowane kółka dla "Co dalej" — prototyp PatientExplView/PatientDraft
+- [x] **Etykiety pól opcjonalnych** — `<span class="opt">· opcjonalne</span>` zamiast "(opcjonalne)" — prototyp field-label
+- [x] **Audyt i18n — hardcoded stringi** — lista naprawionych plików: `lib/i18n/index.ts` (KLUCZOWE: globalny store języka przez `useSyncExternalStore` — wcześniej każdy komponent miał własny `useState`, więc przełącznik EN nie propagował się poza navbar), `components/voice-recorder.tsx` (domyślne etykiety, błąd mikrofonu, aria-labels → klucze `micError`/`recPreview`/`recording`), `components/image-uploader.tsx` (domyślne label/hint/CTA z dict, komunikaty błędów PL/EN, aria "Usuń"), `components/patient-selector.tsx` / `report-selector.tsx` / `examination-type-select.tsx` (domyślne placeholder/emptyText zależne od `lang`), `components/evidence-viewer.tsx` (usunięty hack module-level `lang`, aria-label miniatur PL/EN), `components/ui/combobox.tsx` (aria "Search ..." → placeholder), `app/(app)/layout.tsx` + `app/(auth)/login/page.tsx` (aria-labels nav/brand/język → klucze `ariaHome`/`ariaMainNav`/`ariaLanguage`), `app/(app)/visit/[id]/page.tsx` (brakujący `emptyText` w PatientSelector); nowe klucze w `lib/i18n/pl.ts` + `en.ts`

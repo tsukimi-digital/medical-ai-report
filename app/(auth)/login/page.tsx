@@ -58,7 +58,7 @@ export default function LoginPage() {
             <div className="brand-sub">{t('brandSub')}</div>
           </div>
         </div>
-        <div className="lang-toggle" role="group" aria-label="Language">
+        <div className="lang-toggle" role="group" aria-label={t('ariaLanguage')}>
           {(['pl', 'en'] as const).map((l) => (
             <button
               key={l}

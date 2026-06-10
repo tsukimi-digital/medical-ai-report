@@ -73,6 +73,12 @@ export const pl = {
   reportGen: 'Generowanie raportu',
   qualityReview: 'AI Quality Review',
   fusionStep: 'Warstwa fuzji',
+  stepVision: 'Analiza obrazów (Vision)',
+  stepTranscription: 'Transkrypcja (Whisper)',
+  stepStructuring: 'Strukturyzacja (Claude)',
+  stepImageShort: 'Analiza obrazów',
+  stepTransShort: 'Transkrypcja',
+  stepFusion: 'Fuzja wyników',
   rawObs: 'Surowe obserwacje AI',
   rawObsSub: 'Co model „widzi" zanim przetworzy to w raport',
   recording: 'Nagrywanie…',
@@ -159,6 +165,10 @@ export const pl = {
   patientPanel: 'Dla pacjenta',
   patientPanelBadge:
     'AI wygenerowała tę wersję na podstawie raportu i rozmowy. Nie dodaje nowych faktów medycznych.',
+  editableDraft: 'draft edytowalny',
+  summaryLabel: 'Podsumowanie',
+  addItem: 'Dodaj pozycję',
+  removeItem: 'Usuń',
   keyFindings: 'Kluczowe wyniki',
   nextSteps: 'Co dalej',
   followUp: 'Kontrola',
@@ -185,6 +195,8 @@ export const pl = {
   recReady: 'Nagranie gotowe',
   recSend: 'Wyślij do transkrypcji',
   recReset: 'Nagraj ponownie',
+  recPreview: 'Podgląd nagrania',
+  micError: 'Brak dostępu do mikrofonu. Sprawdź uprawnienia w przeglądarce.',
   priorSurgery: 'Przebyte zabiegi',
   patientAge: 'lat',
   female: 'kobieta',
@@ -203,6 +215,11 @@ export const pl = {
   peselInvalid: 'PESEL musi mieć 11 cyfr',
   patientReports: 'Badania pacjenta',
   backToPatients: 'Pacjenci',
+
+  // a11y labels
+  ariaHome: 'Sonara — strona główna',
+  ariaMainNav: 'Nawigacja główna',
+  ariaLanguage: 'Język interfejsu',
 } as const
 
 export type TranslationKeys = keyof typeof pl

@@ -13,6 +13,7 @@ import { ExaminationTypeSelect } from '@/components/examination-type-select'
 import { ExaminationContextFields } from '@/components/examination-context-fields'
 import { ImageUploader } from '@/components/image-uploader'
 import { VoiceRecorder } from '@/components/voice-recorder'
+import { GenerationProgress } from '@/components/generation-progress'
 import type { Patient, ExaminationContext, AnalysisMode } from '@/lib/types'
 
 type GenMode = 'image' | 'voice' | 'multimodal'
@@ -35,6 +36,17 @@ export default function NewExaminationPage() {
   const [manualMode, setManualMode] = useState(false)
   const [rawTranscription, setRawTranscription] = useState<string | null>(null)
   const [isProcessingReport, setIsProcessingReport] = useState(false)
+  const [stepDone, setStepDone] = useState<Record<string, boolean>>({})
+
+  const markStep = (key: string) => setStepDone((s) => ({ ...s, [key]: true }))
+
+  // Pipeline steps per generation mode — mirrors the prototype GenerationSim
+  const stepKeys =
+    mode === 'voice'
+      ? (['stepTranscription', 'stepStructuring'] as const)
+      : mode === 'multimodal'
+      ? (['stepImageShort', 'stepTransShort', 'stepFusion'] as const)
+      : (['stepVision', 'reportGen'] as const)
 
   useEffect(() => {
     apiClient.getPatients().then(({ patients }) => setPatients(patients))
@@ -70,6 +82,7 @@ export default function NewExaminationPage() {
     setManualMode(false)
     setRawTranscription(null)
     setIsProcessingReport(false)
+    setStepDone({})
     setLoading(true)
     try {
       // Create draft report
@@ -94,6 +107,8 @@ export default function NewExaminationPage() {
           return
         }
 
+        markStep('stepVision')
+
         await apiClient.updateRadReport(report.id, {
           findings: imageAnalysis.findings,
           lowConfidenceFindings: imageAnalysis.lowConfidenceFindings,
@@ -106,11 +121,13 @@ export default function NewExaminationPage() {
           imageCount: images.length,
           aiGenerated: true,
         })
+        markStep('reportGen')
 
       } else if (mode === 'voice') {
         // ── Voice-only two-phase flow ────────────────────────────────────────
         // Phase 1: transcribe → show raw transcription immediately
         const { transcription } = await apiClient.transcribeAudio(voiceBlob!.blob, lang)
+        markStep('stepTranscription')
         setRawTranscription(transcription)
         setIsProcessingReport(true)
         setLoading(false) // unblock UI — show raw preview
@@ -130,6 +147,7 @@ export default function NewExaminationPage() {
             ...draft,
             aiGenerated: true,
           })
+          markStep('stepStructuring')
         } finally {
           setIsProcessingReport(false)
         }
@@ -142,7 +160,10 @@ export default function NewExaminationPage() {
         setLoading(false)
 
         const [imageResult, voiceResult] = await Promise.all([
-          apiClient.analyzeImage(buildImageFormData()),
+          apiClient.analyzeImage(buildImageFormData()).then((r) => {
+            markStep('stepImageShort')
+            return r
+          }),
           apiClient.transcribeAudio(voiceBlob!.blob, lang).then(async ({ transcription }) => {
             setRawTranscription(transcription)
             const voiceDraft = await apiClient.generateReport({
@@ -154,6 +175,7 @@ export default function NewExaminationPage() {
               patientGender: patient!.gender as 'M' | 'F',
               language: lang,
             }) as Partial<import('@/lib/types').RadiologicalReport>
+            markStep('stepTransShort')
             return { transcription, findings: voiceDraft.findings ?? [] }
           }),
         ])
@@ -175,6 +197,7 @@ export default function NewExaminationPage() {
           imageCount: images.length,
           aiGenerated: true,
         })
+        markStep('stepFusion')
 
         setIsProcessingReport(false)
       }
@@ -215,6 +238,29 @@ export default function NewExaminationPage() {
           </div>
         )}
 
+        {(loading || isProcessingReport) ? (
+          /* Generation progress card — prototype GenerationSim */
+          <div className="card card-pad-lg col g20 fade-in">
+            <div className="row g10">
+              <Icon name="sparkle" size={20} style={{ color: 'var(--accent-700)' }} aria-hidden />
+              <div className="h-sec grow">{t('analyzing')}</div>
+              <span className="badge badge-accent mono">
+                {mode === 'multimodal' ? 'FUSION' : mode === 'voice' ? 'WHISPER' : 'TWO-STEP'}
+              </span>
+            </div>
+            <GenerationProgress steps={stepKeys.map((k) => ({ label: t(k), done: !!stepDone[k] }))} />
+            {rawTranscription !== null && (
+              <div className="panel fade-in" style={{ overflow: 'hidden' }}>
+                <div className="row g8" style={{ padding: '9px 13px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                  <Icon name="waveform" size={15} style={{ color: 'var(--accent-700)' }} aria-hidden />
+                  <span className="h-card" style={{ fontSize: 12.5 }}>{t('rawTranscript')}</span>
+                  <span className="badge badge-neutral" style={{ marginLeft: 'auto' }}>Whisper · {lang}</span>
+                </div>
+                <div className="mono" style={{ padding: '12px 14px', fontSize: 12, lineHeight: 1.7, color: 'var(--text-muted)' }}>{rawTranscription}</div>
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="card card-pad-lg col g20">
           {/* Patient */}
           <div>
@@ -257,7 +303,7 @@ export default function NewExaminationPage() {
           <div>
             <label className="field-label" htmlFor="indication">
               {t('clinicalIndication')}
-              <span className="opt"> ({t('optional')})</span>
+              <span className="opt"> · {t('optional')}</span>
             </label>
             <textarea
               id="indication"
@@ -333,7 +379,7 @@ export default function NewExaminationPage() {
           <div>
             <label className="field-label" htmlFor="comments">
               {t('comments')}
-              <span className="opt"> ({t('optional')})</span>
+              <span className="opt"> · {t('optional')}</span>
             </label>
             <textarea
               id="comments"
@@ -392,6 +438,7 @@ export default function NewExaminationPage() {
               : t('genMulti')}
           </Btn>
         </div>
+        )}
       </div>
     </div>
   )

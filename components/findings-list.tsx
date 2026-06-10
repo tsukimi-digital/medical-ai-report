@@ -80,7 +80,7 @@ function FindingRow({
               className="chip chip-edited"
               style={{
                 backgroundColor: 'var(--warn-bg)',
-                color: 'var(--warn-fg)',
+                color: 'var(--warn-text)',
                 fontSize: 10,
                 padding: '1px 6px',
                 borderRadius: 4,

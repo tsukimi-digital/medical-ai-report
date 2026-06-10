@@ -73,6 +73,12 @@ export const en = {
   reportGen: 'Report generation',
   qualityReview: 'AI Quality Review',
   fusionStep: 'Fusion layer',
+  stepVision: 'Image analysis (Vision)',
+  stepTranscription: 'Transcription (Whisper)',
+  stepStructuring: 'Structuring (Claude)',
+  stepImageShort: 'Image analysis',
+  stepTransShort: 'Transcription',
+  stepFusion: 'Result fusion',
   rawObs: 'Raw AI observations',
   rawObsSub: 'What the model sees before turning it into a report',
   recording: 'Recording…',
@@ -159,6 +165,10 @@ export const en = {
   patientPanel: 'For the patient',
   patientPanelBadge:
     'AI generated this version from the report and conversation. It adds no new medical facts.',
+  editableDraft: 'editable draft',
+  summaryLabel: 'Summary',
+  addItem: 'Add item',
+  removeItem: 'Remove',
   keyFindings: 'Key findings',
   nextSteps: 'Next steps',
   followUp: 'Follow-up',
@@ -184,6 +194,8 @@ export const en = {
   recReady: 'Recording ready',
   recSend: 'Send for transcription',
   recReset: 'Record again',
+  recPreview: 'Recording preview',
+  micError: 'Microphone access denied. Check your browser permissions.',
   priorSurgery: 'Prior surgery',
   patientAge: 'y/o',
   female: 'female',
@@ -202,4 +214,9 @@ export const en = {
   peselInvalid: 'National ID must be 11 digits',
   patientReports: 'Patient reports',
   backToPatients: 'Patients',
+
+  // a11y labels
+  ariaHome: 'Sonara — home',
+  ariaMainNav: 'Main navigation',
+  ariaLanguage: 'Interface language',
 } as const

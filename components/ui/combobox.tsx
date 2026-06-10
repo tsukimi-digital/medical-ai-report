@@ -138,7 +138,7 @@ export function Combobox<T>({
               value={query}
               onChange={(e) => { setQuery(e.target.value); setActiveIndex(-1) }}
               onKeyDown={handleKeyDown}
-              aria-label={`Search ${placeholder}`}
+              aria-label={placeholder}
             />
           </div>
           <div className="divider" style={{ margin: '0 -6px 6px' }} />

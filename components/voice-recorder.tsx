@@ -31,13 +31,13 @@ function getSupportedMimeType(): string {
 export function VoiceRecorder({
   onRecording,
   disabled,
-  labelRecord = 'Nagraj głos',
-  labelStop = 'Zatrzymaj',
+  labelRecord,
+  labelStop,
 }: VoiceRecorderProps) {
   const { t } = useI18n()
   const [state, setState] = useState<RecorderState>('idle')
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState(false)
   const [duration, setDuration] = useState(0)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -47,7 +47,7 @@ export function VoiceRecorder({
   const blobRef = useRef<Blob | null>(null)
 
   const startRecording = useCallback(async () => {
-    setError(null)
+    setError(false)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { sampleRate: 16000, channelCount: 1 },
@@ -74,7 +74,7 @@ export function VoiceRecorder({
       setDuration(0)
       timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000)
     } catch (err) {
-      setError('Brak dostępu do mikrofonu. Sprawdź uprawnienia w przeglądarce.')
+      setError(true)
       setState('idle')
     }
   }, [])
@@ -114,13 +114,13 @@ export function VoiceRecorder({
           disabled={disabled}
           type="button"
         >
-          {labelRecord}
+          {labelRecord ?? t('genVoice')}
         </Btn>
       )}
 
       {state === 'recording' && (
         <div className="panel row g12" style={{ padding: '12px 14px', borderColor: 'var(--crit-bd)' }}>
-          <span className="pulse-dot" aria-label="Nagrywanie" />
+          <span className="pulse-dot" aria-label={t('recording')} />
           <div className="wave" aria-hidden>
             {Array.from({ length: 5 }).map((_, i) => (
               <i key={i} style={{ animationDelay: `${i * 0.15}s` }} />
@@ -129,7 +129,7 @@ export function VoiceRecorder({
           <span className="mono faint" style={{ fontSize: 12 }}>{formatDuration(duration)}</span>
           <div className="grow" />
           <Btn variant="danger" size="sm" icon="x" onClick={stopRecording} type="button">
-            {labelStop}
+            {labelStop ?? t('stopRec')}
           </Btn>
         </div>
       )}
@@ -142,7 +142,7 @@ export function VoiceRecorder({
             <span className="faint mono" style={{ fontSize: 12 }}>{formatDuration(duration)}</span>
           </div>
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <audio src={audioUrl} controls style={{ width: '100%', height: 36 }} aria-label="Podgląd nagrania" />
+          <audio src={audioUrl} controls style={{ width: '100%', height: 36 }} aria-label={t('recPreview')} />
           <div className="row g8">
             <Btn variant="primary" size="sm" icon="upload" onClick={sendRecording} type="button">
               {t('recSend')}
@@ -156,7 +156,7 @@ export function VoiceRecorder({
 
       {error && (
         <div className="faint" style={{ fontSize: 12, color: 'var(--crit-text)', marginTop: 6 }} role="alert">
-          {error}
+          {t('micError')}
         </div>
       )}
     </div>

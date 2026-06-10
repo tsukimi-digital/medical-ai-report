@@ -15,7 +15,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { lang, setLang, t } = useI18n()
   const [user, setUser] = useState<User | null>(null)
   const [showLangToast, setShowLangToast] = useState(false)
-  const isFirstRender = useRef(true)
+  const prevLangRef = useRef<string | null>(null)
 
   useEffect(() => {
     const u = apiClient.getSessionUser()
@@ -35,13 +35,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       })
   }, [router])
 
-  // Show toast whenever lang changes (except on first render)
+  // Show toast whenever lang actually changes (compare against previous value —
+  // a "first render" flag misfires under StrictMode's double-mount in dev)
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false
-      return
+    if (prevLangRef.current !== lang) {
+      if (prevLangRef.current !== null) setShowLangToast(true)
+      prevLangRef.current = lang
     }
-    setShowLangToast(true)
   }, [lang])
 
   const handleDismissToast = useCallback(() => setShowLangToast(false), [])
@@ -55,7 +55,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="app-shell">
       {/* Navbar */}
       <header className="navbar" role="banner">
-        <Link href="/dashboard" className="brand" aria-label="Sonara — home">
+        <Link href="/dashboard" className="brand" aria-label={t('ariaHome')}>
           <div className="brand-mark">
             <Icon name="activity" size={17} aria-hidden />
           </div>
@@ -65,7 +65,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </Link>
 
-        <nav className="row g12" aria-label="Main navigation" style={{ marginLeft: 8 }}>
+        <nav className="row g12" aria-label={t('ariaMainNav')} style={{ marginLeft: 8 }}>
           <Link
             href="/dashboard"
             className="link"
@@ -85,7 +85,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <div className="nav-spacer" />
 
         {/* Language toggle */}
-        <div className="lang-toggle" role="group" aria-label="Language">
+        <div className="lang-toggle" role="group" aria-label={t('ariaLanguage')}>
           {(['pl', 'en'] as const).map((l) => (
             <button
               key={l}

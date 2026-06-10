@@ -11,6 +11,7 @@ import { Collapse } from '@/components/ui/collapse'
 import { useI18n } from '@/lib/i18n/index'
 import { apiClient } from '@/lib/api-client'
 import { VoiceRecorder } from '@/components/voice-recorder'
+import { GenerationProgress } from '@/components/generation-progress'
 import { QualityCheckPanel } from '@/components/quality-check-panel'
 import { PatientSelector } from '@/components/patient-selector'
 import { ReportSelector } from '@/components/report-selector'
@@ -20,7 +21,7 @@ const NEW_VISIT_ID = 'new'
 
 export default function VisitDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const { lang, t } = useI18n()
+  const { lang, t, L } = useI18n()
   const isNew = params.id === NEW_VISIT_ID
 
   const [report, setReport] = useState<MedicalReport | null>(null)
@@ -277,6 +278,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                   onChange={setSelectedPatient}
                   patients={allPatients}
                   placeholder={t('selectPatientPh')}
+                  emptyText={t('noResults')}
                   lang={lang}
                 />
               </div>
@@ -284,7 +286,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                 <div>
                   <label className="field-label">
                     {t('selectRadReport')}
-                    <span className="opt"> ({t('optional')})</span>
+                    <span className="opt"> · {t('optional')}</span>
                   </label>
                   <ReportSelector
                     value={selectedRadReport}
@@ -305,6 +307,15 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
           <div style={{ marginBottom: 20 }}>
             <Collapse title={t('radContext')} icon="image" defaultOpen>
               <div style={{ padding: 16 }} className="col g12">
+                {radReportContext.classification && (
+                  <div className="panel row g8" style={{ padding: '7px 11px', background: 'var(--accent-tint)', borderColor: 'var(--accent-tint-2)' }}>
+                    <Icon name="target" size={15} style={{ color: 'var(--accent-800)' }} aria-hidden />
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--accent-800)' }}>
+                      {radReportContext.classification.name} {radReportContext.classification.value}{' '}
+                      <span style={{ fontWeight: 400, fontSize: 11.5 }}>· {L(radReportContext.classification.label)}</span>
+                    </span>
+                  </div>
+                )}
                 {radReportContext.impression && (
                   <div>
                     <div className="eyebrow" style={{ marginBottom: 6 }}>
@@ -320,7 +331,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                     </div>
                     <ul style={{ margin: 0, paddingLeft: 18 }}>
                       {radReportContext.findings.map((f, i) => (
-                        <li key={i} style={{ fontSize: 12.5, marginBottom: 4, color: f.isDeviation ? 'var(--warn-fg)' : 'inherit' }}>
+                        <li key={i} style={{ fontSize: 12.5, marginBottom: 4, color: f.isDeviation ? 'var(--warn-text)' : 'inherit' }}>
                           {f.text}
                           {f.anatomicalLocation && <span className="faint"> — {f.anatomicalLocation}</span>}
                         </li>
@@ -340,31 +351,24 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
               <Icon name="mic" size={17} style={{ color: 'var(--accent-700)' }} aria-hidden />
               {t('recordVisit')}
             </div>
-            {transcribing ? (
-              <div className="row g10">
-                <Icon name="loader" size={18} className="spin" aria-hidden />
-                <span className="muted">{t('transcribing')}</span>
-              </div>
-            ) : isProcessingReport ? (
-              <div className="col g10">
+            {transcribing || isProcessingReport ? (
+              <div className="col g16">
+                <GenerationProgress
+                  steps={[
+                    { label: t('stepTranscription'), done: !transcribing },
+                    { label: t('stepStructuring'), done: false },
+                  ]}
+                />
                 {rawTranscription !== null && (
-                  <div>
-                    <label className="field-label" style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                      {lang === 'en' ? 'Whisper Transcription — processing with AI…' : 'Transkrypcja Whisper — przetwarzanie przez AI…'}
-                    </label>
-                    <textarea
-                      className="textarea"
-                      readOnly
-                      value={rawTranscription}
-                      rows={3}
-                      style={{ opacity: 0.7, resize: 'none', fontSize: 13 }}
-                    />
+                  <div className="panel fade-in" style={{ overflow: 'hidden' }}>
+                    <div className="row g8" style={{ padding: '9px 13px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                      <Icon name="waveform" size={15} style={{ color: 'var(--accent-700)' }} aria-hidden />
+                      <span className="h-card" style={{ fontSize: 12.5 }}>{t('rawTranscript')}</span>
+                      <span className="badge badge-neutral" style={{ marginLeft: 'auto' }}>Whisper · {lang}</span>
+                    </div>
+                    <div className="mono" style={{ padding: '12px 14px', fontSize: 12, lineHeight: 1.7, color: 'var(--text-muted)' }}>{rawTranscription}</div>
                   </div>
                 )}
-                <div className="row g8" style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                  <Icon name="loader" size={14} className="spin" aria-hidden />
-                  {lang === 'en' ? 'Claude is generating the report draft…' : 'Claude generuje szkic raportu…'}
-                </div>
               </div>
             ) : (
               <VoiceRecorder onRecording={handleVoiceRecording} labelRecord={t('recordVisit')} labelStop={t('stopRec')} />
@@ -372,14 +376,16 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
           </div>
         )}
 
-        {/* Medical report form */}
+        {/* Medical report form + patient draft — two columns like the prototype */}
         {report && (
           <div className="col g20">
+            <div className="visit-grid">
             <div className="card" style={{ overflow: 'hidden' }}>
-              <div className="row between" style={{ padding: '16px 18px', borderBottom: '1px solid var(--border)' }}>
-                <h2 className="h-sec">{t('medReport')}</h2>
+              <div className="row g8" style={{ padding: '13px 16px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                <Icon name="stetho" size={17} style={{ color: 'var(--accent-700)' }} aria-hidden />
+                <h2 className="h-card" style={{ margin: 0 }}>{t('medReport')}</h2>
               </div>
-              <div style={{ padding: 20 }} className="col g16">
+              <div style={{ padding: 18 }} className="col g16">
                 <div>
                   <label className="field-label" htmlFor="anamnesis">{t('anamnesis')}</label>
                   <textarea
@@ -407,7 +413,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                         {lang === 'pl' ? 'Wymaga weryfikacji' : 'Needs verification'}
                       </div>
                       {report.uncertainItems.map((item, i) => (
-                        <div key={i} className="row g6" style={{ fontSize: 12, color: 'var(--warn-fg)' }}>
+                        <div key={i} className="row g6" style={{ fontSize: 12, color: 'var(--warn-text)' }}>
                           <span>⚠</span><span>[WYMAGA WERYFIKACJI] {item}</span>
                         </div>
                       ))}
@@ -428,17 +434,31 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
               </div>
             </div>
 
-            {/* Patient explanation */}
+            {/* Patient draft panel — prototype PatientDraft */}
             {(report.patientExplanation || editedExplanation) && (
-              <Collapse title={t('patientPanel')} sub={t('patientPanelBadge')} icon="user" defaultOpen>
-                <div style={{ padding: 16 }} className="col g12">
+              <div className="card" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <div className="row g8" style={{ padding: '13px 16px', background: 'var(--accent-tint)', borderBottom: '1px solid var(--accent-tint-2)' }}>
+                  <Icon name="heart" size={17} style={{ color: 'var(--accent-800)' }} aria-hidden />
+                  <h2 className="h-card" style={{ margin: 0, color: 'var(--accent-800)' }}>{t('patientPanel')}</h2>
+                  {!isApproved && (
+                    <span className="badge badge-accent" style={{ marginLeft: 'auto' }}>
+                      <Icon name="edit" size={11} aria-hidden />
+                      {t('editableDraft')}
+                    </span>
+                  )}
+                </div>
+                <div className="col g16" style={{ padding: 18 }}>
+                  <div className="faint" style={{ fontSize: 11.5, lineHeight: 1.5, display: 'flex', gap: 7 }}>
+                    <Icon name="sparkle" size={13} style={{ flex: 'none', marginTop: 1, color: 'var(--accent-700)' }} aria-hidden />
+                    {t('patientPanelBadge')}
+                  </div>
                   {!isApproved && editedExplanation ? (
                     <>
                       <div>
-                        <label className="field-label">{lang === 'pl' ? 'Podsumowanie' : 'Summary'}</label>
+                        <label className="field-label">{t('summaryLabel')}</label>
                         <textarea
                           className="textarea"
-                          rows={4}
+                          rows={3}
                           value={editedExplanation.plainLanguageSummary}
                           onChange={(e) =>
                             setEditedExplanation({ ...editedExplanation, plainLanguageSummary: e.target.value })
@@ -446,140 +466,149 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                         />
                       </div>
                       <div>
-                        <div className="row between" style={{ marginBottom: 8 }}>
-                          <div className="eyebrow">{t('keyFindings')}</div>
-                          <button
-                            type="button"
-                            className="link row g4"
-                            style={{ fontSize: 12, fontWeight: 500 }}
-                            onClick={() => setEditedExplanation({ ...editedExplanation, keyFindings: [...editedExplanation.keyFindings, ''] })}
-                          >
-                            <Icon name="plus" size={13} aria-hidden />
-                            {lang === 'pl' ? 'Dodaj punkt' : 'Add item'}
-                          </button>
-                        </div>
-                        <div className="col g6">
+                        <div className="eyebrow" style={{ marginBottom: 8 }}>{t('keyFindings')}</div>
+                        <ul className="col g6" style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                           {editedExplanation.keyFindings.map((f, i) => (
-                            <div key={i} className="row g6">
+                            <li key={i} className="row g8" style={{ alignItems: 'flex-start' }}>
+                              <span aria-hidden style={{ marginTop: 6 }}>
+                                <Icon name="dot" size={8} style={{ color: 'var(--accent-600)', flex: 'none' }} aria-hidden />
+                              </span>
                               <input
                                 className="input"
                                 value={f}
+                                style={{ fontSize: 13, padding: '6px 10px' }}
                                 onChange={(e) => {
                                   const updated = [...editedExplanation.keyFindings]
                                   updated[i] = e.target.value
                                   setEditedExplanation({ ...editedExplanation, keyFindings: updated })
                                 }}
-                                style={{ fontSize: 13, flex: 1 }}
                               />
                               <button
                                 type="button"
                                 className="iconbtn"
-                                aria-label={lang === 'pl' ? 'Usuń punkt' : 'Remove item'}
+                                style={{ width: 30, height: 30, flex: 'none' }}
+                                title={t('removeItem')}
+                                aria-label={t('removeItem')}
                                 onClick={() => setEditedExplanation({ ...editedExplanation, keyFindings: editedExplanation.keyFindings.filter((_, j) => j !== i) })}
                               >
-                                <Icon name="x" size={14} aria-hidden />
+                                <Icon name="trash" size={14} aria-hidden />
                               </button>
-                            </div>
+                            </li>
                           ))}
-                          {editedExplanation.keyFindings.length === 0 && (
-                            <p className="faint" style={{ margin: 0, fontSize: 12 }}>
-                              {lang === 'pl' ? 'Brak punktów — kliknij „Dodaj punkt"' : 'No items — click "Add item"'}
-                            </p>
-                          )}
-                        </div>
+                        </ul>
+                        <button
+                          type="button"
+                          className="link row g6"
+                          style={{ fontSize: 12, marginTop: editedExplanation.keyFindings.length > 0 ? 8 : 2 }}
+                          onClick={() => setEditedExplanation({ ...editedExplanation, keyFindings: [...editedExplanation.keyFindings, ''] })}
+                        >
+                          <Icon name="plus" size={13} aria-hidden />
+                          {t('addItem')}
+                        </button>
                       </div>
                       <div>
-                        <div className="row between" style={{ marginBottom: 8 }}>
-                          <div className="eyebrow">{t('nextSteps')}</div>
-                          <button
-                            type="button"
-                            className="link row g4"
-                            style={{ fontSize: 12, fontWeight: 500 }}
-                            onClick={() => setEditedExplanation({ ...editedExplanation, nextSteps: [...editedExplanation.nextSteps, ''] })}
-                          >
-                            <Icon name="plus" size={13} aria-hidden />
-                            {lang === 'pl' ? 'Dodaj krok' : 'Add step'}
-                          </button>
-                        </div>
-                        <div className="col g6">
+                        <div className="eyebrow" style={{ marginBottom: 8 }}>{t('nextSteps')}</div>
+                        <ol className="col g6" style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                           {editedExplanation.nextSteps.map((s, i) => (
-                            <div key={i} className="row g6">
-                              <span className="mono faint" style={{ fontSize: 12, minWidth: 18, paddingTop: 9 }}>{i + 1}.</span>
+                            <li key={i} className="row g8" style={{ alignItems: 'flex-start' }}>
+                              <span aria-hidden style={{ marginTop: 6, width: 18, height: 18, borderRadius: 99, background: 'var(--accent-tint)', color: 'var(--accent-800)', fontSize: 10.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>{i + 1}</span>
                               <input
                                 className="input"
                                 value={s}
+                                style={{ fontSize: 13, padding: '6px 10px' }}
                                 onChange={(e) => {
                                   const updated = [...editedExplanation.nextSteps]
                                   updated[i] = e.target.value
                                   setEditedExplanation({ ...editedExplanation, nextSteps: updated })
                                 }}
-                                style={{ fontSize: 13, flex: 1 }}
                               />
                               <button
                                 type="button"
                                 className="iconbtn"
-                                aria-label={lang === 'pl' ? 'Usuń krok' : 'Remove step'}
+                                style={{ width: 30, height: 30, flex: 'none' }}
+                                title={t('removeItem')}
+                                aria-label={t('removeItem')}
                                 onClick={() => setEditedExplanation({ ...editedExplanation, nextSteps: editedExplanation.nextSteps.filter((_, j) => j !== i) })}
                               >
-                                <Icon name="x" size={14} aria-hidden />
+                                <Icon name="trash" size={14} aria-hidden />
                               </button>
-                            </div>
+                            </li>
                           ))}
-                          {editedExplanation.nextSteps.length === 0 && (
-                            <p className="faint" style={{ margin: 0, fontSize: 12 }}>
-                              {lang === 'pl' ? 'Brak kroków — kliknij „Dodaj krok"' : 'No steps — click "Add step"'}
-                            </p>
-                          )}
-                        </div>
+                        </ol>
+                        <button
+                          type="button"
+                          className="link row g6"
+                          style={{ fontSize: 12, marginTop: editedExplanation.nextSteps.length > 0 ? 8 : 2 }}
+                          onClick={() => setEditedExplanation({ ...editedExplanation, nextSteps: [...editedExplanation.nextSteps, ''] })}
+                        >
+                          <Icon name="plus" size={13} aria-hidden />
+                          {t('addItem')}
+                        </button>
                       </div>
                       <div>
-                        <label className="field-label">{t('followUp')}</label>
-                        <input
-                          className="input"
-                          value={editedExplanation.followUp ?? ''}
-                          onChange={(e) =>
-                            setEditedExplanation({ ...editedExplanation, followUp: e.target.value })
-                          }
-                          style={{ fontSize: 13 }}
-                        />
+                        <div className="eyebrow" style={{ marginBottom: 8 }}>{t('followUp')}</div>
+                        <div className="row g8">
+                          <Icon name="calendar" size={15} style={{ color: 'var(--accent-700)', flex: 'none', marginTop: 9 }} aria-hidden />
+                          <input
+                            className="input"
+                            value={editedExplanation.followUp ?? ''}
+                            style={{ fontSize: 13 }}
+                            onChange={(e) =>
+                              setEditedExplanation({ ...editedExplanation, followUp: e.target.value })
+                            }
+                          />
+                        </div>
                       </div>
                     </>
                   ) : (
                     <>
-                      <p style={{ fontSize: 13.5, lineHeight: 1.6, margin: 0 }}>
-                        {report.patientExplanation?.plainLanguageSummary}
-                      </p>
-                      {(report.patientExplanation?.keyFindings.length ?? 0) > 0 && (
+                      <div>
+                        <label className="field-label">{t('summaryLabel')}</label>
+                        <div className="panel" style={{ padding: '10px 12px', fontSize: 13.5, lineHeight: 1.6, background: 'var(--surface-2)' }}>
+                          {(report.patientExplanation ?? editedExplanation)?.plainLanguageSummary}
+                        </div>
+                      </div>
+                      {((report.patientExplanation ?? editedExplanation)?.keyFindings.length ?? 0) > 0 && (
                         <div>
                           <div className="eyebrow" style={{ marginBottom: 8 }}>{t('keyFindings')}</div>
-                          <ul style={{ margin: 0, paddingLeft: 18 }}>
-                            {report.patientExplanation?.keyFindings.map((f, i) => (
-                              <li key={i} style={{ fontSize: 13, marginBottom: 4 }}>{f}</li>
+                          <ul className="col g6" style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                            {(report.patientExplanation ?? editedExplanation)?.keyFindings.map((f, i) => (
+                              <li key={i} className="row g8">
+                                <Icon name="dot" size={8} style={{ color: 'var(--accent-600)', flex: 'none' }} aria-hidden />
+                                <span style={{ fontSize: 13 }}>{f}</span>
+                              </li>
                             ))}
                           </ul>
                         </div>
                       )}
-                      {(report.patientExplanation?.nextSteps.length ?? 0) > 0 && (
+                      {((report.patientExplanation ?? editedExplanation)?.nextSteps.length ?? 0) > 0 && (
                         <div>
                           <div className="eyebrow" style={{ marginBottom: 8 }}>{t('nextSteps')}</div>
-                          <ol style={{ margin: 0, paddingLeft: 18 }}>
-                            {report.patientExplanation?.nextSteps.map((s, i) => (
-                              <li key={i} style={{ fontSize: 13, marginBottom: 4 }}>{s}</li>
+                          <ol className="col g6" style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                            {(report.patientExplanation ?? editedExplanation)?.nextSteps.map((s, i) => (
+                              <li key={i} className="row g8">
+                                <span aria-hidden style={{ width: 18, height: 18, borderRadius: 99, background: 'var(--accent-tint)', color: 'var(--accent-800)', fontSize: 10.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>{i + 1}</span>
+                                <span style={{ fontSize: 13 }}>{s}</span>
+                              </li>
                             ))}
                           </ol>
                         </div>
                       )}
-                      {report.patientExplanation?.followUp && (
-                        <div className="row g8">
-                          <Icon name="calendar" size={15} style={{ color: 'var(--text-faint)' }} aria-hidden />
-                          <span className="muted" style={{ fontSize: 13 }}>{report.patientExplanation.followUp}</span>
+                      {(report.patientExplanation ?? editedExplanation)?.followUp && (
+                        <div>
+                          <div className="eyebrow" style={{ marginBottom: 8 }}>{t('followUp')}</div>
+                          <div className="panel row g8" style={{ padding: '10px 12px', background: 'var(--surface-2)' }}>
+                            <Icon name="calendar" size={15} style={{ color: 'var(--accent-700)', flex: 'none' }} aria-hidden />
+                            <div style={{ fontSize: 12.5, fontWeight: 600 }}>{(report.patientExplanation ?? editedExplanation)?.followUp}</div>
+                          </div>
                         </div>
                       )}
                     </>
                   )}
                 </div>
-              </Collapse>
+              </div>
             )}
+            </div>
 
             {/* Quality Check */}
             {report.aiQualityCheck && (
