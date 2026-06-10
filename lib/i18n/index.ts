@@ -81,6 +81,16 @@ export function setGlobalLang(lang: Lang): void {
 }
 
 /**
+ * Test-only helper: restores the default language ('pl') and clears all
+ * subscribers so the module-level store does not leak state between tests.
+ * Wired into the vitest setup file — do not call from application code.
+ */
+export function resetI18nForTests(): void {
+  currentLang = 'pl'
+  langListeners.clear()
+}
+
+/**
  * React hook for language state + translation function.
  * Language is global — changing it anywhere updates every subscribed component.
  * Usage: const { lang, setLang, t, L: translate } = useI18n()
