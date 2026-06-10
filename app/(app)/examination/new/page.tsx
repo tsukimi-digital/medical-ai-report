@@ -355,6 +355,7 @@ export default function NewExaminationPage() {
             <div>
               <label className="field-label">{t('uploadImages')}</label>
               <ImageUploader
+                files={images}
                 onFiles={setImages}
                 label={t('uploadImages')}
                 hint={t('uploadHint')}
