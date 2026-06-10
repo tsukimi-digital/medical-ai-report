@@ -53,3 +53,24 @@ AI klasyfikuje torbiele nerek tylko jako Bosniak I lub II z obrazu USG. Wyższe 
 ---
 
 *Dokument aktualizowany przy każdym etapie rozwoju projektu.*
+
+---
+
+## Poprawki z review PR #23 (design parity) — nieblokujące
+
+Znaleziska TL z code review PR #23 (2026-06-10). Świadomie odłożone — do zrobienia w kolejnej iteracji FE.
+
+### Pusta kolumna grida wizyty bez patientExplanation
+`visit/[id]/page.tsx:582` — `.visit-grid` (1fr 1fr) renderuje panel pacjenta warunkowo; gdy AI nie zwróci `patientExplanation` (osiągalne: `lib/ai/claude.ts:745`), prawa kolumna zostaje pusta. Dodać fallback layoutu (np. 1 kolumna) lub placeholder panelu.
+
+### Stan formularza po błędzie generacji
+`examination/new/page.tsx` — przy błędzie generacji formularz się remountuje: previews ImageUploadera znikają, ale page-state `images`/`voiceBlob` pozostaje → mylący stan UI. Zachować previews albo czyścić cały stan spójnie.
+
+### Krok „Strukturyzacja" w postępie generacji wizyty
+`visit/[id]/page.tsx:543` — `stepStructuring` ma na sztywno `done: false`; powinien odhaczać się po zakończeniu wywołania Claude (kosmetyczne).
+
+### Komunikaty błędów image-uploadera przez słownik i18n
+`components/image-uploader.tsx` — 3 komunikaty walidacji jako inline ternary PL/EN; przenieść do kluczy w `lib/i18n/{pl,en}.ts` dla spójności.
+
+### Reset globalnego store języka w testach
+`lib/i18n/index.ts:65` — module-level store bez resetu między testami (potencjalny przeciek stanu). Dodać helper `resetI18nForTests()` albo reset w `beforeEach` setupu vitest.
