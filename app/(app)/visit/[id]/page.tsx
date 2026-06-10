@@ -320,7 +320,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                     </div>
                     <ul style={{ margin: 0, paddingLeft: 18 }}>
                       {radReportContext.findings.map((f, i) => (
-                        <li key={i} style={{ fontSize: 12.5, marginBottom: 4, color: f.isDeviation ? 'var(--warn-fg)' : 'inherit' }}>
+                        <li key={i} style={{ fontSize: 12.5, marginBottom: 4, color: f.isDeviation ? 'var(--warn-text)' : 'inherit' }}>
                           {f.text}
                           {f.anatomicalLocation && <span className="faint"> — {f.anatomicalLocation}</span>}
                         </li>
@@ -407,7 +407,7 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                         {lang === 'pl' ? 'Wymaga weryfikacji' : 'Needs verification'}
                       </div>
                       {report.uncertainItems.map((item, i) => (
-                        <div key={i} className="row g6" style={{ fontSize: 12, color: 'var(--warn-fg)' }}>
+                        <div key={i} className="row g6" style={{ fontSize: 12, color: 'var(--warn-text)' }}>
                           <span>⚠</span><span>[WYMAGA WERYFIKACJI] {item}</span>
                         </div>
                       ))}

@@ -193,13 +193,14 @@ export default function ExaminationDetailPage({ params }: { params: { id: string
         )}
         {isApproved && report.aiGenerated && (
           <div style={{ marginBottom: 12 }}>
-            <Banner kind="info">
-              <span className="row g6">
-                <Icon name="sparkle" size={13} aria-hidden />
-                {lang === 'pl'
-                  ? `Raport zatwierdzony${report.approvedByName ? ` — ${report.approvedByName}` : ''}${report.approvedAt ? ` · ${new Date(report.approvedAt).toLocaleString(lang === 'pl' ? 'pl-PL' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })}` : ''} · Źródło AI: ${report.analysisMode === 'image' ? 'zdjęcie' : report.analysisMode === 'voice' ? 'głos' : 'multimodal'}`
-                  : `Approved${report.approvedByName ? ` — ${report.approvedByName}` : ''}${report.approvedAt ? ` · ${new Date(report.approvedAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}` : ''} · AI source: ${report.analysisMode}`}
-              </span>
+            <Banner
+              kind="ok"
+              icon="shield"
+              title={`${lang === 'pl' ? 'Raport zatwierdzony' : 'Report approved'}${report.approvedByName ? ` — ${report.approvedByName}` : ''}`}
+            >
+              {lang === 'pl'
+                ? `${report.approvedAt ? `${new Date(report.approvedAt).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })} · ` : ''}Źródło AI: ${report.analysisMode === 'image' ? 'zdjęcie' : report.analysisMode === 'voice' ? 'głos' : 'multimodal'}`
+                : `${report.approvedAt ? `${new Date(report.approvedAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })} · ` : ''}AI source: ${report.analysisMode}`}
             </Banner>
           </div>
         )}

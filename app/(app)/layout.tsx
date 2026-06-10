@@ -15,7 +15,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { lang, setLang, t } = useI18n()
   const [user, setUser] = useState<User | null>(null)
   const [showLangToast, setShowLangToast] = useState(false)
-  const isFirstRender = useRef(true)
+  const prevLangRef = useRef<string | null>(null)
 
   useEffect(() => {
     const u = apiClient.getSessionUser()
@@ -35,13 +35,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       })
   }, [router])
 
-  // Show toast whenever lang changes (except on first render)
+  // Show toast whenever lang actually changes (compare against previous value —
+  // a "first render" flag misfires under StrictMode's double-mount in dev)
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false
-      return
+    if (prevLangRef.current !== lang) {
+      if (prevLangRef.current !== null) setShowLangToast(true)
+      prevLangRef.current = lang
     }
-    setShowLangToast(true)
   }, [lang])
 
   const handleDismissToast = useCallback(() => setShowLangToast(false), [])

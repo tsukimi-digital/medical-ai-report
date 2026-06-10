@@ -1,12 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap');
-
+/* Design tokens as CSS variables — components ported from the prototype use
+   them in inline styles (e.g. style={{ color: 'var(--accent-700)' }}); without
+   these definitions those styles silently resolve to transparent/currentColor.
+   Values mirror tailwind.config.ts 1:1 — keep both in sync. */
 :root {
+  /* Neutrals (cool slate) */
+  --bg:            oklch(0.985 0.004 240);
+  --surface:       #ffffff;
+  --surface-2:     oklch(0.975 0.005 240);
+  --surface-3:     oklch(0.962 0.006 240);
+  --border:        oklch(0.922 0.006 240);
+  --border-strong: oklch(0.86 0.009 240);
+  --text:          oklch(0.29 0.021 246);
+  --text-muted:    oklch(0.50 0.018 246);
+  --text-faint:    oklch(0.62 0.014 246);
+
+  /* Accent (deep clinical blue) */
+  --accent:        #0369a1;
+  --accent-600:    #0284c7;
+  --accent-700:    #0369a1;
+  --accent-800:    #075985;
+  --accent-50:     #eff6fb;
+  --accent-100:    #dcebff;
+  --accent-tint:   oklch(0.96 0.018 238);
+  --accent-tint-2: oklch(0.93 0.03 238);
+  --on-accent:     #ffffff;
+
+  /* Confidence (color + label always) */
+  --hi-text:  #15803d;  --hi-bg:  #e7f7ec;  --hi-bd:  #a7e0b8;
+  --med-text: #b45309;  --med-bg: #fdf3df;  --med-bd: #f3d18a;
+  --low-text: #be123c;  --low-bg: #fdeaee;  --low-bd: #f4b3c1;
+
+  /* Semantic status */
+  --ok-text: #15803d;   --ok-bg: #e7f7ec;   --ok-bd: #a7e0b8;
+  --warn-text: #b45309; --warn-bg: #fdf3df; --warn-bd: #f3d18a;
+  --crit-text: #be123c; --crit-bg: #fdeaee; --crit-bd: #f4b3c1;
+
+  /* Radii / shadow */
+  --r-xs: 5px; --r-sm: 7px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
+  --sh-1: 0 1px 2px rgba(15,33,54,0.05), 0 1px 1px rgba(15,33,54,0.04);
+  --sh-2: 0 2px 6px rgba(15,33,54,0.06), 0 1px 2px rgba(15,33,54,0.05);
+  --sh-3: 0 8px 28px rgba(15,33,54,0.10), 0 2px 8px rgba(15,33,54,0.06);
+  --sh-4: 0 18px 50px rgba(15,33,54,0.16), 0 6px 16px rgba(15,33,54,0.08);
+
   --nav-h: 56px;
   --disc-h: 34px;
+
+  --font: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 @layer base {
@@ -34,7 +80,13 @@
   *::-webkit-scrollbar-track { background: transparent; }
 }
 
-@layer components {
+/* ============================================================================
+   Design-system classes (NOT inside @layer components on purpose):
+   Tailwind purges @layer components classes missing from content scan, and we
+   build names dynamically (`btn-${variant}`, `banner-${kind}`), so they'd be
+   stripped from the build. Plain CSS is always emitted.
+   ============================================================================ */
+
   /* === Layout helpers === */
   .row { display: flex; align-items: center; }
   .col { display: flex; flex-direction: column; }
@@ -493,7 +545,6 @@
     font-size: 0.875rem;
     animation: fadein 0.15s ease;
   }
-}
 
 /* === Keyframes === */
 @keyframes fade { from { opacity: 0; } }
