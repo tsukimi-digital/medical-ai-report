@@ -1,11 +1,13 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import { Icon } from './ui/icon'
 import { useI18n } from '@/lib/i18n/index'
 
 type ImageUploaderProps = {
   onFiles: (files: File[]) => void
+  /** Controlled file list — previews are derived from it and survive remounts. */
+  files?: File[]
   disabled?: boolean
   maxFiles?: number
   maxSizeBytes?: number
@@ -19,6 +21,7 @@ const MAX_SIZE = 10 * 1024 * 1024 // 10 MB
 
 export function ImageUploader({
   onFiles,
+  files: controlledFiles,
   disabled,
   maxFiles = MAX_FILES,
   maxSizeBytes = MAX_SIZE,
@@ -26,47 +29,51 @@ export function ImageUploader({
   hint: hintProp,
   uploadCta: uploadCtaProp,
 }: ImageUploaderProps) {
-  const { lang, t } = useI18n()
+  const { t } = useI18n()
   const label = labelProp ?? t('uploadImages')
   const hint = hintProp ?? t('uploadHint')
   const uploadCta = uploadCtaProp ?? t('uploadCta')
   const inputRef = useRef<HTMLInputElement>(null)
+  const isControlled = controlledFiles !== undefined
+  const [internalFiles, setInternalFiles] = useState<File[]>([])
+  const acceptedFiles = isControlled ? controlledFiles : internalFiles
   const [previews, setPreviews] = useState<{ url: string; name: string }[]>([])
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+
+  // Previews derive from the accepted file list (controlled or internal),
+  // so they survive remounts and stay in sync with the parent state.
+  useEffect(() => {
+    const urls = acceptedFiles.map((f) => ({ url: URL.createObjectURL(f), name: f.name }))
+    setPreviews(urls)
+    return () => urls.forEach((p) => URL.revokeObjectURL(p.url))
+  }, [acceptedFiles])
 
   const processFiles = useCallback(
     (files: FileList | File[]) => {
       setError(null)
       const arr = Array.from(files)
       if (arr.length > maxFiles) {
-        setError(lang === 'en' ? `Maximum ${maxFiles} files.` : `Maksymalnie ${maxFiles} plików.`)
+        setError(t('uploadErrMaxFiles').replace('{n}', String(maxFiles)))
         return
       }
       const oversized = arr.find((f) => f.size > maxSizeBytes)
       if (oversized) {
         const mb = maxSizeBytes / 1024 / 1024
         setError(
-          lang === 'en'
-            ? `File "${oversized.name}" exceeds ${mb} MB.`
-            : `Plik „${oversized.name}" przekracza ${mb} MB.`,
+          t('uploadErrTooLarge').replace('{name}', oversized.name).replace('{mb}', String(mb)),
         )
         return
       }
       const notImage = arr.find((f) => !f.type.startsWith('image/'))
       if (notImage) {
-        setError(
-          lang === 'en'
-            ? `File "${notImage.name}" is not an image.`
-            : `Plik „${notImage.name}" nie jest obrazem.`,
-        )
+        setError(t('uploadErrNotImage').replace('{name}', notImage.name))
         return
       }
-      const urls = arr.map((f) => ({ url: URL.createObjectURL(f), name: f.name }))
-      setPreviews(urls)
+      if (!isControlled) setInternalFiles(arr)
       onFiles(arr)
     },
-    [maxFiles, maxSizeBytes, onFiles, lang],
+    [maxFiles, maxSizeBytes, onFiles, t, isControlled],
   )
 
   const handleDrop = useCallback(
@@ -84,9 +91,9 @@ export function ImageUploader({
   }
 
   const removePreview = (idx: number) => {
-    URL.revokeObjectURL(previews[idx].url)
-    const next = previews.filter((_, i) => i !== idx)
-    setPreviews(next)
+    const next = acceptedFiles.filter((_, i) => i !== idx)
+    if (!isControlled) setInternalFiles(next)
+    onFiles(next)
   }
 
   return (

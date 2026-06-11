@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { RadiologicalReport, MedicalReport, Finding } from '@/lib/types'
 import { FindingsList } from './findings-list'
 import { Icon } from './ui/icon'
+import { getDict } from '@/lib/i18n/index'
 
 type ReportEditorProps = {
   report: RadiologicalReport | MedicalReport
@@ -19,6 +20,7 @@ function isRadReport(r: RadiologicalReport | MedicalReport): r is RadiologicalRe
 
 export function ReportEditor({ report, onChange, readonly, lang = 'pl', onEvidence }: ReportEditorProps) {
   const t = (pl: string, en: string) => (lang === 'en' ? en : pl)
+  const dict = getDict(lang)
 
   const handleFindingUpdate = (id: string, patch: Partial<Finding>) => {
     if (!isRadReport(report)) return
@@ -52,17 +54,23 @@ export function ReportEditor({ report, onChange, readonly, lang = 'pl', onEviden
           />
         </div>
 
-        {/* Low confidence */}
+        {/* Low confidence — red card, prototype "needs verification" panel */}
         {(report.lowConfidenceFindings?.length ?? 0) > 0 && (
-          <div>
-            <div className="h-sec" style={{ marginBottom: 4 }}>
-              {t('Wymaga weryfikacji', 'Needs verification')}
+          <div
+            className="panel"
+            style={{ padding: 14, background: 'var(--low-bg)', borderColor: 'var(--low-bd)' }}
+          >
+            <div className="row g8" style={{ marginBottom: 6 }}>
+              <Icon name="alertCircle" size={16} style={{ color: 'var(--low-text)' }} aria-hidden />
+              <span className="h-card" style={{ color: 'var(--low-text)' }}>
+                {dict.needsVerification} · {report.lowConfidenceFindings!.length}
+              </span>
             </div>
-            <div className="faint" style={{ fontSize: 12, marginBottom: 10 }}>
-              {t(
-                'Te elementy wymagają weryfikacji — AI nie było pewne.',
-                'These items need verification — the AI was uncertain.',
-              )}
+            <div
+              className="faint"
+              style={{ fontSize: 12, marginBottom: 12, color: 'var(--low-text)', opacity: 0.85 }}
+            >
+              {dict.needsVerificationHint}
             </div>
             <FindingsList
               findings={report.lowConfidenceFindings!}
