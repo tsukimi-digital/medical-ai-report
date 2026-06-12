@@ -85,7 +85,7 @@ Migracja prototypu → Next.js + Tailwind (prototyp = źródło prawdy):
 - `POST /api/auth/login` `{email,password}` → set-cookie + `User`; `/logout`; `GET /me` → `User`.
 - `GET/POST /api/patients`, `GET /api/patients/[id]` → `Patient`.
 - `GET/POST /api/reports/radiological`, `GET/PUT/PATCH /api/reports/radiological/[id]` (PATCH=approve). Analogicznie `/medical`.
-- `POST /api/ai/analyze-image` — **multipart/form-data** (`images` 1–5 ≤5MB, `examinationType`, `clinicalIndication`, `examinationContext` JSON, `comments`, `patientAge`, `patientGender`, `language`) → `{imageQuality, qualityIssues[], findings[], impression, imagingLimitations, structuredFindings?, aiQualityCheck?}`.
+- `POST /api/ai/analyze-image` — **multipart/form-data** (`images` 1–5 ≤10MB, `examinationType`, `clinicalIndication`, `examinationContext` JSON, `comments`, `patientAge`, `patientGender`, `language`) → `{imageQuality, qualityIssues[], findings[], impression, imagingLimitations, structuredFindings?, aiQualityCheck?}`.
 - `POST /api/ai/transcribe` — audio → `{transcription, transcriptionWarning?}`.
 - `POST /api/ai/generate-report` — `{transcription, role, examinationType, examinationContext, patientAge, patientGender, language}` → radiolog: `{findings[],impression,transcriptionIssues[]}` / lekarz: `{anamnesis,diagnosis,diagnosisConfidence,recommendations,uncertainItems[]}`.
 - `POST /api/ai/fuse-findings` — `{findingsFromImages[], findingsFromSpeech[]}` → `FusionResult`.

@@ -182,3 +182,17 @@
 - [x] **Krok „Strukturyzacja"** — `visit/[id]/page.tsx`: `stepStructuring` odhaczany po zakończeniu wywołania Claude (`structuringDone` state)
 - [x] **Komunikaty image-uploadera przez i18n** — 3 komunikaty walidacji → klucze `uploadErrMaxFiles`/`uploadErrTooLarge`/`uploadErrNotImage` w `lib/i18n/{pl,en}.ts`
 - [x] **Reset store języka w testach** — `lib/i18n/index.ts`: eksport `resetI18nForTests()`; `tests/setup.ts`: `beforeEach` reset
+
+## Faza 10 — Zgodność ze spec: max_tokens + session timeout (BE2: Akira, FE: Yuki) — fix/spec-compliance
+
+### BE2 (Akira Yamamoto)
+- [x] **max_tokens wg spec (l.504+511)** — `lib/ai/claude.ts`: wszystkie 16 wywołań Claude na formułę `useThinking ? 10000 : 1500` (wcześniej 2000–4000); wywołania bez thinking → 1500
+
+### FE (Yuki Sato) + BE1 (Kenji Mori)
+- [x] **Toast ostrzegawczy po 10 min nieaktywności** — `lib/use-inactivity-timeout.ts` + `app/(app)/layout.tsx`: „Sesja wygaśnie za 5 minut — zapisz raport." (i18n PL/EN), zamykany, chowany przez aktywność; reset timerów na pointerdown/keydown (throttle 1s); testy jednostkowe hooka (vitest fake timers)
+- [x] **Auto-logout po 15 min nieaktywności** — `apiClient.logout()` + redirect do `/login`
+- [x] **Sliding expiration sesji (BE1: Kenji)** — `middleware.ts`: `session.save()` na każdym uwierzytelnionym żądaniu — cookie maxAge=900s liczy się od ostatniej aktywności, nie od logowania; klient pinguje `/api/auth/me` max co 4 min aktywności
+
+### Docs (Yuki Sato)
+- [x] **IMPLEMENTATION-PLAN.md l.88** — „≤5MB" → „≤10MB" (zgodnie ze spec l.969 i implementacją)
+- [x] **TODO.md** — sekcja „Odłożone z audytu zgodności (2026-06-12)": VoiceRecorder audio constrainty, krok „AI Quality Review" w UI postępu, rozjazd nazwiska rad3
