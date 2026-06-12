@@ -76,7 +76,7 @@
 ### BE2 (Akira Yamamoto) — feature/faza3-be2-fixes
 - [x] Fix Bug #1: session.userId → session.user we wszystkich 5 AI routes
 - [x] Import SESSION_OPTIONS z lib/auth.ts (usunąć duplikaty z AI routes)
-- [x] Fix limit pliku serwer → 5MB spójne z klientem + dodać MIME type validation
+- [x] Fix limit pliku serwer → 10MB spójne z klientem + dodać MIME type validation
 - [x] Dodać retry/timeout 45s do generate-report, fuse-findings, generate-patient-explanation
 - [x] Fix rad3: store.ts — zsynchronizować imię z auth.ts (Katarzyna Wróbel)
 

@@ -410,11 +410,11 @@ W praktyce: Warstwa 1 (~600 tokenów) jest cache'owana przez 5 minut od ostatnie
 
 ### Analiza obrazu USG (`/api/ai/analyze-image`)
 
-**Input:** `multipart/form-data` — pola: `images` (1–5 plików binarnych, max 5MB każdy), `examinationType`, `clinicalIndication`, `examinationContext` (JSON string), `comments`, `patientAge`, `patientGender`, `language`
+**Input:** `multipart/form-data` — pola: `images` (1–5 plików binarnych, max 10MB każdy), `examinationType`, `clinicalIndication`, `examinationContext` (JSON string), `comments`, `patientAge`, `patientGender`, `language`
 
 Klient: `FormData.append('images', blob, filename)`. Serwer: `request.formData()` → preprocessing sharp po stronie serwera → base64 do store.
 
-Powód `multipart` zamiast JSON: base64 w JSON body zwiększa rozmiar o ~33% — 5 obrazów × 5MB = ~33MB zakodowanego JSON przekracza limit Vercel 4.5MB. `multipart/form-data` wysyła dane binarne bez narzutu base64.
+Powód `multipart` zamiast JSON: base64 w JSON body zwiększa rozmiar o ~33% — 5 obrazów × 10MB = ~67MB zakodowanego JSON wielokrotnie przekracza limit Vercel 4.5MB. `multipart/form-data` wysyła dane binarne bez narzutu base64.
 
 **Pre-processing obrazów (image-preprocessor.ts):**
 Przed base64 encoding każdy obraz przechodzi przez `sharp`:
