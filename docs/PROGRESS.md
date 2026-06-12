@@ -76,7 +76,7 @@
 ### BE2 (Akira Yamamoto) — feature/faza3-be2-fixes
 - [x] Fix Bug #1: session.userId → session.user we wszystkich 5 AI routes
 - [x] Import SESSION_OPTIONS z lib/auth.ts (usunąć duplikaty z AI routes)
-- [x] Fix limit pliku serwer → 5MB spójne z klientem + dodać MIME type validation
+- [x] Fix limit pliku serwer → 10MB spójne z klientem + dodać MIME type validation
 - [x] Dodać retry/timeout 45s do generate-report, fuse-findings, generate-patient-explanation
 - [x] Fix rad3: store.ts — zsynchronizować imię z auth.ts (Katarzyna Wróbel)
 
@@ -182,3 +182,20 @@
 - [x] **Krok „Strukturyzacja"** — `visit/[id]/page.tsx`: `stepStructuring` odhaczany po zakończeniu wywołania Claude (`structuringDone` state)
 - [x] **Komunikaty image-uploadera przez i18n** — 3 komunikaty walidacji → klucze `uploadErrMaxFiles`/`uploadErrTooLarge`/`uploadErrNotImage` w `lib/i18n/{pl,en}.ts`
 - [x] **Reset store języka w testach** — `lib/i18n/index.ts`: eksport `resetI18nForTests()`; `tests/setup.ts`: `beforeEach` reset
+
+## Faza 10 — Zgodność ze spec: max_tokens + session timeout (BE2: Akira, FE: Yuki) — fix/spec-compliance
+
+### BE2 (Akira Yamamoto)
+- [x] **max_tokens — reguła kanoniczna `thinking ? 10000 : 4000`** — `lib/ai/claude.ts`: wszystkie wywołania Claude na formułę `useThinking ? 10000 : 4000`; wywołania bez thinking → 4000 (decyzja użytkownika 2026-06-12: 4000 dla demo — bez ryzyka obcięcia odpowiedzi; zastępuje wcześniejsze 1500 ze spec)
+- [x] **Opus 4.8 API compat** — thinking enabled+budget_tokens → adaptive; usunięte temperature (sampling params zwracają 400 na Opus 4.8) — lib/ai/claude.ts
+- [x] **Synchronizacja dokumentów do reguły 10000/4000** — spec (`docs/superpowers/specs/2026-06-03-medical-ai-poc-design.md` l.501–516, l.523: max_tokens 4000, adaptive thinking, bez temperature, model claude-opus-4-8) + `docs/IMPLEMENTATION-PLAN.md` (decyzja 4 — korekta, Faza 2 — max_tokens 10000/4000, Ryzyka — budget_tokens→max_tokens); koniec rozjazdu spec↔kod
+
+### FE (Yuki Sato) + BE1 (Kenji Mori)
+- [x] **Toast ostrzegawczy po 10 min nieaktywności** — `lib/use-inactivity-timeout.ts` + `app/(app)/layout.tsx`: „Sesja wygaśnie za 5 minut — zapisz raport." (i18n PL/EN), zamykany, chowany przez aktywność; reset timerów na pointerdown/keydown (throttle 1s); testy jednostkowe hooka (vitest fake timers)
+- [x] **Auto-logout po 15 min nieaktywności** — `apiClient.logout()` + redirect do `/login`
+- [x] **Sliding expiration sesji (BE1: Kenji)** — `middleware.ts`: `session.save()` na każdym uwierzytelnionym żądaniu — cookie maxAge=900s liczy się od ostatniej aktywności, nie od logowania; klient pinguje `/api/auth/me` max co 4 min aktywności
+- [x] **Poprawki po review TL #26 (keep-alive save, wheel, toast stack)** — BE1: `app/api/auth/me/route.ts` sam odświeża cookie (`session.save()`, overload req/res — matcher middleware wyklucza `/api/auth`) + test Set-Cookie; FE: `wheel` jako zdarzenie aktywności (ten sam throttle) + `.toast-stack` (kolumna fixed) zapobiega nakładaniu toastów sesyjnego i językowego
+
+### Docs (Yuki Sato)
+- [x] **IMPLEMENTATION-PLAN.md l.88** — „≤5MB" → „≤10MB" (zgodnie ze spec l.969 i implementacją)
+- [x] **TODO.md** — sekcja „Odłożone z audytu zgodności (2026-06-12)": VoiceRecorder audio constrainty, krok „AI Quality Review" w UI postępu, rozjazd nazwiska rad3

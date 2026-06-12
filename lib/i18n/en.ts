@@ -218,6 +218,10 @@ export const en = {
   patientReports: 'Patient reports',
   backToPatients: 'Patients',
 
+  // session timeout
+  sessionExpireWarning: 'Your session will expire in 5 minutes — save your report.',
+  sessionToastDismiss: 'Dismiss',
+
   // a11y labels
   ariaHome: 'Sonara — home',
   ariaMainNav: 'Main navigation',

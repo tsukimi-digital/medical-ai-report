@@ -410,11 +410,11 @@ W praktyce: Warstwa 1 (~600 tokenów) jest cache'owana przez 5 minut od ostatnie
 
 ### Analiza obrazu USG (`/api/ai/analyze-image`)
 
-**Input:** `multipart/form-data` — pola: `images` (1–5 plików binarnych, max 5MB każdy), `examinationType`, `clinicalIndication`, `examinationContext` (JSON string), `comments`, `patientAge`, `patientGender`, `language`
+**Input:** `multipart/form-data` — pola: `images` (1–5 plików binarnych, max 10MB każdy), `examinationType`, `clinicalIndication`, `examinationContext` (JSON string), `comments`, `patientAge`, `patientGender`, `language`
 
 Klient: `FormData.append('images', blob, filename)`. Serwer: `request.formData()` → preprocessing sharp po stronie serwera → base64 do store.
 
-Powód `multipart` zamiast JSON: base64 w JSON body zwiększa rozmiar o ~33% — 5 obrazów × 5MB = ~33MB zakodowanego JSON przekracza limit Vercel 4.5MB. `multipart/form-data` wysyła dane binarne bez narzutu base64.
+Powód `multipart` zamiast JSON: base64 w JSON body zwiększa rozmiar o ~33% — 5 obrazów × 10MB = ~67MB zakodowanego JSON wielokrotnie przekracza limit Vercel 4.5MB. `multipart/form-data` wysyła dane binarne bez narzutu base64.
 
 **Pre-processing obrazów (image-preprocessor.ts):**
 Przed base64 encoding każdy obraz przechodzi przez `sharp`:
@@ -499,19 +499,18 @@ Język raportu: {language}
 ```
 
 **Konfiguracja API call:**
-- `thinking: { type: 'enabled', budget_tokens: 8000 }` — włączone gdy `imageCount ≥ 3` lub `imageQuality === 'suboptimal'`
-- `temperature: 0` — TYLKO gdy thinking wyłączone (Anthropic API odrzuca `temperature` ≠ 1 gdy thinking aktywne)
-- `max_tokens: 10000` gdy thinking aktywne / `1500` gdy wyłączone (`max_tokens` musi być > `budget_tokens`)
+- `thinking: { type: 'adaptive' }` — włączone gdy `imageCount ≥ 3` lub `imageQuality === 'suboptimal'` (Opus 4.8 — `enabled`+`budget_tokens` usunięte; gdy thinking wyłączone, pole `thinking` pomijamy)
+- bez parametrów samplingu — Opus 4.8 nie przyjmuje `temperature` / `top_p` / `top_k` (400)
+- `max_tokens: 10000` gdy thinking aktywne / `4000` gdy wyłączone (tokeny thinking liczą się do `max_tokens`)
 - `cache_control: { type: 'ephemeral' }` na Warstwie 1+2 system promptu
 
 ```typescript
 const useThinking = imageCount >= 3 || imageQuality === 'suboptimal'
 const apiParams = {
-  model: 'claude-sonnet-4-6',
-  max_tokens: useThinking ? 10000 : 1500,
-  ...(useThinking
-    ? { thinking: { type: 'enabled', budget_tokens: 8000 } }
-    : { temperature: 0 })
+  model: 'claude-opus-4-8',
+  max_tokens: useThinking ? 10000 : 4000,
+  // Opus 4.8 — adaptive thinking; enabled+budget_tokens oraz temperature usunięte z API
+  ...(useThinking ? { thinking: { type: 'adaptive' } } : {})
 }
 ```
 
@@ -521,7 +520,7 @@ Gdy `imageQuality === 'non_diagnostic'` — UI pokazuje czerwony baner, findings
 **Obsługa błędów — analyze-image:**
 - Timeout: 45s (ustaw `export const maxDuration = 60` w route handler — wymaga Vercel Pro)
 - Błąd API Anthropic (4xx/5xx): UI pokazuje "Analiza niedostępna. Spróbuj ponownie lub kontynuuj ręcznie." z przyciskiem ponowienia
-- Retry: max 1 auto-retry z korektywnym komunikatem `"Your previous response was not valid JSON. Return ONLY the JSON object:"` — przy `temperature: 0` identyczny prompt da ten sam błąd
+- Retry: max 1 auto-retry z korektywnym komunikatem `"Your previous response was not valid JSON. Return ONLY the JSON object:"` — korektywny prefiks zmienia prompt, więc retry ma szansę dać poprawny JSON (Opus 4.8 nie przyjmuje `temperature`)
 - Po 2 nieudanych próbach: odblokuj edytor z pustym raportem, pokaż baner "AI niedostępne — wprowadź raport ręcznie"
 
 ### Transkrypcja głosu (`/api/ai/transcribe`)

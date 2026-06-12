@@ -16,6 +16,14 @@ import { buildAnalyzeImageSystemPrompt, buildGenerateReportSystemPrompt } from '
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const ADVANCED = process.env.AI_PIPELINE_ADVANCED === 'true'
 
+// Opus 4.8 API compat:
+// - thinking: {type:'enabled', budget_tokens:N} is REMOVED on Opus 4.8/4.7 (400 error).
+//   The only on-mode is {type:'adaptive'} — the model decides how much to think.
+//   Omitting the `thinking` field = thinking disabled (used when useThinking is false).
+// - Sampling params (temperature, top_p, top_k) are REMOVED on Opus 4.8/4.7 (400 error
+//   on any use) — do NOT add `temperature` to any call in this file.
+// SDK 0.27 types don't know `thinking: {type:'adaptive'}` — existing any/as casts cover it.
+
 // Helper: create a system block with prompt caching.
 // cache_control is not in SDK 0.27 types but is accepted by the API — cast via unknown.
 function cachedTextBlock(text: string): Anthropic.TextBlockParam {
@@ -258,9 +266,8 @@ Wyodrębnij surowe obserwacje z obrazów. Lista punktowana, technicznie, bez int
   }
 
   if (useThinking) {
-    extractionParams.thinking = { type: 'enabled', budget_tokens: 8000 }
-  } else {
-    extractionParams.temperature = 0
+    // Adaptive thinking (Opus 4.8) — no budget_tokens; thinking tokens count toward max_tokens.
+    extractionParams.thinking = { type: 'adaptive' }
   }
 
   const extractionResponse = await client.messages.create(extractionParams) as Anthropic.Message
@@ -273,7 +280,6 @@ Wyodrębnij surowe obserwacje z obrazów. Lista punktowana, technicznie, bez int
   const reportResponse = await client.messages.create({
     model: 'claude-opus-4-8',
     max_tokens: 4000,
-    temperature: 0,
     system: systemBlocks,
     messages: [
       {
@@ -292,7 +298,6 @@ Wyodrębnij surowe obserwacje z obrazów. Lista punktowana, technicznie, bez int
     const retryResponse = await client.messages.create({
       model: 'claude-opus-4-8',
       max_tokens: 4000,
-      temperature: 0,
       messages: [
         {
           role: 'user',
@@ -354,7 +359,7 @@ async function analyzeImagesAdvanced(params: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sirParams: any = {
     model: 'claude-opus-4-8',
-    max_tokens: useThinking ? 10000 : 3000,
+    max_tokens: useThinking ? 10000 : 4000,
     system: advSystemBlocks,
     messages: [
       {
@@ -375,9 +380,8 @@ Format: { "structures": { "struktura": { "visible": boolean, "description": stri
     ],
   }
   if (useThinking) {
-    sirParams.thinking = { type: 'enabled', budget_tokens: 6000 }
-  } else {
-    sirParams.temperature = 0
+    // Adaptive thinking (Opus 4.8) — no budget_tokens; thinking tokens count toward max_tokens.
+    sirParams.thinking = { type: 'adaptive' }
   }
 
   const sirResponse = await client.messages.create(sirParams)
@@ -387,8 +391,7 @@ Format: { "structures": { "struktura": { "visible": boolean, "description": stri
   // ---- Etap 2A: Anatomy Detection ----
   const anatomyResponse = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 2000,
-    temperature: 0,
+    max_tokens: 4000,
     system: advSystemBlocks,
     messages: [{
       role: 'user',
@@ -406,7 +409,6 @@ JSON: { "identifiedStructures": string[], "missingStructures": string[] }`,
   const obsParams = {
     model: 'claude-opus-4-8' as const,
     max_tokens: 4000,
-    temperature: 0 as const,
     system: advSystemBlocks,
     messages: [
       {
@@ -434,8 +436,7 @@ Return JSON: { "observations": { "<structure>": { "echogenicity": string, "size_
   // ---- Etap 2C: Abnormality Detection ----
   const abnormalityResponse = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 3000,
-    temperature: 0,
+    max_tokens: 4000,
     system: advSystemBlocks,
     messages: [{
       role: 'user',
@@ -463,8 +464,7 @@ JSON: {
   // ---- Etap 2D: Classification — formal classification systems (TI-RADS, BI-RADS, etc.) ----
   const classParams = {
     model: 'claude-opus-4-8' as const,
-    max_tokens: 2000,
-    temperature: 0 as const,
+    max_tokens: 4000,
     system: advSystemBlocks,
     messages: [
       {
@@ -497,7 +497,6 @@ Return JSON: { "classifications": [{ "system": string, "value": string, "label":
   const reportResponse = await client.messages.create({
     model: 'claude-opus-4-8',
     max_tokens: 4000,
-    temperature: 0,
     system: advSystemBlocks,
     messages: [{
       role: 'user',
@@ -524,8 +523,7 @@ Pola: findings[], lowConfidenceFindings[], impression, imagingLimitations, aiSug
   // ---- Etap 3: AI Reviewer ----
   const reviewResponse = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 2000,
-    temperature: 0,
+    max_tokens: 4000,
     messages: [{
       role: 'user',
       content: `Jesteś doświadczonym radiologiem weryfikującym draft raportu USG.
@@ -569,7 +567,8 @@ Odpowiedz JSON:
     const correctionParams = {
       model: 'claude-opus-4-8' as const,
       max_tokens: useThinking ? 10000 : 4000,
-      ...(useThinking ? { thinking: { type: 'enabled' as const, budget_tokens: 8000 } } : { temperature: 0 as const }),
+      // Adaptive thinking (Opus 4.8) — budget_tokens removed; omit thinking when disabled.
+      ...(useThinking ? { thinking: { type: 'adaptive' as const } } : {}),
       system: advSystemBlocks,
       messages: [
         {
@@ -668,7 +667,6 @@ async function generateRadiologyReport(params: {
   const response = await client.messages.create({
     model: 'claude-opus-4-8',
     max_tokens: 4000,
-    temperature: 0,
     system: [cachedTextBlock(SYSTEM_LAYER1_GENERATE_REPORT_RADIOLOGIST), cachedTextBlock(examLayer2)],
     messages: [{ role: 'user', content: userMessage }],
   } as Parameters<typeof client.messages.create>[0]) as Anthropic.Message
@@ -702,8 +700,7 @@ async function generateMedicalReport(params: {
 
   const response = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 3000,
-    temperature: 0,
+    max_tokens: 4000,
     system: [cachedTextBlock(SYSTEM_LAYER1_GENERATE_REPORT_DOCTOR)],
     messages: [{ role: 'user', content: userMessage }],
   } as Parameters<typeof client.messages.create>[0]) as Anthropic.Message
@@ -724,8 +721,7 @@ async function generateMedicalReport(params: {
   // Generate patient explanation in a second call
   const explanationResponse = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 2000,
-    temperature: 0,
+    max_tokens: 4000,
     messages: [{
       role: 'user',
       content: `Napisz wyjaśnienie wyników badania dla pacjenta — językiem prostym, bez żargonu medycznego.
@@ -798,8 +794,7 @@ export async function fuseFindings(params: {
 }): Promise<FusionResult> {
   const response = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 3000,
-    temperature: 0,
+    max_tokens: 4000,
     messages: [{
       role: 'user',
       content: `Masz wyniki dwóch niezależnych analiz tego samego badania USG:
@@ -855,8 +850,7 @@ export async function generatePatientExplanation(params: {
 
   const response = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 2000,
-    temperature: 0,
+    max_tokens: 4000,
     messages: [{
       role: 'user',
       content: `Napisz wyjaśnienie wyników badania dla pacjenta — językiem prostym, bez żargonu medycznego.

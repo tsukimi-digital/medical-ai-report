@@ -52,4 +52,22 @@ AI klasyfikuje torbiele nerek tylko jako Bosniak I lub II z obrazu USG. Wyższe 
 
 ---
 
+## Odłożone z audytu zgodności (2026-06-12)
+
+### VoiceRecorder — constrainty audio wg spec
+`components/voice-recorder.tsx:52` nie ustawia pełnych constraintów z spec (l.548-553):
+dodać `echoCancellation: true`, `noiseSuppression: true`, `autoGainControl: true`
+oraz `sampleRate: { ideal: 16000 }` w `getUserMedia()`.
+
+### Krok „AI Quality Review" w UI postępu generacji (pipeline advanced)
+`components/generation-progress.tsx` + `examination/new` — dziś review wykonuje się
+w ramach jednego calla `analyze-image` i nie jest widoczny jako osobny krok postępu.
+Dodać krok „AI Quality Review" dla `AI_PIPELINE_ADVANCED=true`.
+
+### rad3 — ujednolicić nazwisko
+`lib/auth.ts:11` („dr Katarzyna Wróbel") vs `lib/store.ts:16` („Wiśniewska") — rozjazd
+danych demo dla konta rad3. Ujednolicić w obu plikach.
+
+---
+
 *Dokument aktualizowany przy każdym etapie rozwoju projektu.*
