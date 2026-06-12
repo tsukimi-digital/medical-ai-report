@@ -187,6 +187,7 @@
 
 ### BE2 (Akira Yamamoto)
 - [x] **max_tokens wg spec (l.504+511)** — `lib/ai/claude.ts`: wszystkie 16 wywołań Claude na formułę `useThinking ? 10000 : 1500` (wcześniej 2000–4000); wywołania bez thinking → 1500
+- [x] **Opus 4.8 API compat** — thinking enabled+budget_tokens → adaptive; usunięte temperature (sampling params zwracają 400 na Opus 4.8) — lib/ai/claude.ts
 
 ### FE (Yuki Sato) + BE1 (Kenji Mori)
 - [x] **Toast ostrzegawczy po 10 min nieaktywności** — `lib/use-inactivity-timeout.ts` + `app/(app)/layout.tsx`: „Sesja wygaśnie za 5 minut — zapisz raport." (i18n PL/EN), zamykany, chowany przez aktywność; reset timerów na pointerdown/keydown (throttle 1s); testy jednostkowe hooka (vitest fake timers)
