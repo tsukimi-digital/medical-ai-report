@@ -55,7 +55,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   // -------------------------------------------------------------------------
   // Session inactivity (spec l.1128): warn after 10 min, auto-logout after 15.
-  // Activity (pointerdown/keydown) resets the timers and hides the warning;
+  // Activity (pointerdown/keydown/wheel) resets the timers and hides the warning;
   // a throttled /api/auth/me ping slides the server-side cookie so the 15-min
   // window counts from last activity, not from login.
   // -------------------------------------------------------------------------
@@ -163,28 +163,31 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       {/* Page content */}
       <main>{children}</main>
 
-      {/* Session expiry warning toast — persistent until activity or dismissal */}
-      {showSessionToast && (
-        <Toast
-          message={t('sessionExpireWarning')}
-          onDismiss={() => setShowSessionToast(false)}
-          duration={null}
-          dismissible
-          dismissLabel={t('sessionToastDismiss')}
-        />
-      )}
+      {/* Toasts — stacked in a column so simultaneous toasts never overlap */}
+      <div className="toast-stack">
+        {/* Session expiry warning toast — persistent until activity or dismissal */}
+        {showSessionToast && (
+          <Toast
+            message={t('sessionExpireWarning')}
+            onDismiss={() => setShowSessionToast(false)}
+            duration={null}
+            dismissible
+            dismissLabel={t('sessionToastDismiss')}
+          />
+        )}
 
-      {/* Lang change toast */}
-      {showLangToast && (
-        <Toast
-          message={
-            lang === 'pl'
-              ? `Wygenerowany raport jest w języku PL. Zmiana języka interfejsu nie wpływa na treść raportu.`
-              : `The generated report is in EN. Changing the interface language does not affect report content.`
-          }
-          onDismiss={handleDismissToast}
-        />
-      )}
+        {/* Lang change toast */}
+        {showLangToast && (
+          <Toast
+            message={
+              lang === 'pl'
+                ? `Wygenerowany raport jest w języku PL. Zmiana języka interfejsu nie wpływa na treść raportu.`
+                : `The generated report is in EN. Changing the interface language does not affect report content.`
+            }
+            onDismiss={handleDismissToast}
+          />
+        )}
+      </div>
     </div>
   )
 }

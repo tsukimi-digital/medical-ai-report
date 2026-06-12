@@ -79,6 +79,26 @@ describe('useInactivityTimeout', () => {
     expect(onWarn).not.toHaveBeenCalled()
   })
 
+  it('resets timers on wheel (scroll) as well', () => {
+    const { onWarn, onActivity } = setup()
+    act(() => vi.advanceTimersByTime(9 * 60_000))
+    act(() => window.dispatchEvent(new Event('wheel')))
+    expect(onActivity).toHaveBeenCalledTimes(1)
+    act(() => vi.advanceTimersByTime(2 * 60_000))
+    expect(onWarn).not.toHaveBeenCalled()
+  })
+
+  it('wheel shares the same activity throttle', () => {
+    const { onActivity } = setup()
+    act(() => vi.advanceTimersByTime(ACTIVITY_THROTTLE_MS + 1))
+    act(() => {
+      window.dispatchEvent(new Event('wheel'))
+      window.dispatchEvent(new Event('wheel'))
+      window.dispatchEvent(new Event('pointerdown'))
+    })
+    expect(onActivity).toHaveBeenCalledTimes(1)
+  })
+
   it('hides warning and restarts cycle when activity happens after the warning', () => {
     const { onWarn, onTimeout, onActivity } = setup()
 

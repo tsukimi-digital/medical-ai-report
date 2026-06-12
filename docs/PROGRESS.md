@@ -194,6 +194,7 @@
 - [x] **Toast ostrzegawczy po 10 min nieaktywności** — `lib/use-inactivity-timeout.ts` + `app/(app)/layout.tsx`: „Sesja wygaśnie za 5 minut — zapisz raport." (i18n PL/EN), zamykany, chowany przez aktywność; reset timerów na pointerdown/keydown (throttle 1s); testy jednostkowe hooka (vitest fake timers)
 - [x] **Auto-logout po 15 min nieaktywności** — `apiClient.logout()` + redirect do `/login`
 - [x] **Sliding expiration sesji (BE1: Kenji)** — `middleware.ts`: `session.save()` na każdym uwierzytelnionym żądaniu — cookie maxAge=900s liczy się od ostatniej aktywności, nie od logowania; klient pinguje `/api/auth/me` max co 4 min aktywności
+- [x] **Poprawki po review TL #26 (keep-alive save, wheel, toast stack)** — BE1: `app/api/auth/me/route.ts` sam odświeża cookie (`session.save()`, overload req/res — matcher middleware wyklucza `/api/auth`) + test Set-Cookie; FE: `wheel` jako zdarzenie aktywności (ten sam throttle) + `.toast-stack` (kolumna fixed) zapobiega nakładaniu toastów sesyjnego i językowego
 
 ### Docs (Yuki Sato)
 - [x] **IMPLEMENTATION-PLAN.md l.88** — „≤5MB" → „≤10MB" (zgodnie ze spec l.969 i implementacją)

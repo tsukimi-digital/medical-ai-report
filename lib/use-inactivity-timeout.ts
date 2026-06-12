@@ -53,10 +53,13 @@ export interface InactivityTimeoutOptions {
   timeoutAfterMs?: number
 }
 
+/** Window events treated as user activity (all share the same throttle). */
+export const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel'] as const
+
 /**
- * Client-side inactivity tracker. Resets on pointerdown/keydown (throttled).
- * Timers restart on every (throttled) activity; warning and logout fire only
- * after a full uninterrupted period of inactivity.
+ * Client-side inactivity tracker. Resets on pointerdown/keydown/wheel
+ * (throttled). Timers restart on every (throttled) activity; warning and
+ * logout fire only after a full uninterrupted period of inactivity.
  */
 export function useInactivityTimeout(options: InactivityTimeoutOptions) {
   const optsRef = useRef(options)
@@ -94,13 +97,15 @@ export function useInactivityTimeout(options: InactivityTimeoutOptions) {
     }
 
     startTimers()
-    window.addEventListener('pointerdown', handleActivity)
-    window.addEventListener('keydown', handleActivity)
+    for (const event of ACTIVITY_EVENTS) {
+      window.addEventListener(event, handleActivity)
+    }
 
     return () => {
       clearTimers()
-      window.removeEventListener('pointerdown', handleActivity)
-      window.removeEventListener('keydown', handleActivity)
+      for (const event of ACTIVITY_EVENTS) {
+        window.removeEventListener(event, handleActivity)
+      }
     }
     // Threshold options are read once on mount by design — the timeout values
     // never change at runtime.
