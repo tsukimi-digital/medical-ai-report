@@ -236,7 +236,7 @@ async function analyzeImagesTwoStep(params: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const extractionParams: any = {
     model: 'claude-opus-4-8',
-    max_tokens: useThinking ? 10000 : 4000,
+    max_tokens: useThinking ? 10000 : 1500,
     system: systemBlocks,
     messages: [
       {
@@ -272,7 +272,7 @@ Wyodrębnij surowe obserwacje z obrazów. Lista punktowana, technicznie, bez int
   // ---- Step 2: Report Generation ----
   const reportResponse = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 4000,
+    max_tokens: 1500,
     temperature: 0,
     system: systemBlocks,
     messages: [
@@ -291,7 +291,7 @@ Wyodrębnij surowe obserwacje z obrazów. Lista punktowana, technicznie, bez int
   if (!parsed) {
     const retryResponse = await client.messages.create({
       model: 'claude-opus-4-8',
-      max_tokens: 4000,
+      max_tokens: 1500,
       temperature: 0,
       messages: [
         {
@@ -354,7 +354,7 @@ async function analyzeImagesAdvanced(params: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sirParams: any = {
     model: 'claude-opus-4-8',
-    max_tokens: useThinking ? 10000 : 3000,
+    max_tokens: useThinking ? 10000 : 1500,
     system: advSystemBlocks,
     messages: [
       {
@@ -387,7 +387,7 @@ Format: { "structures": { "struktura": { "visible": boolean, "description": stri
   // ---- Etap 2A: Anatomy Detection ----
   const anatomyResponse = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 2000,
+    max_tokens: 1500,
     temperature: 0,
     system: advSystemBlocks,
     messages: [{
@@ -405,7 +405,7 @@ JSON: { "identifiedStructures": string[], "missingStructures": string[] }`,
   // ---- Etap 2B: Observation Extraction — extract all observable features per structure ----
   const obsParams = {
     model: 'claude-opus-4-8' as const,
-    max_tokens: 4000,
+    max_tokens: 1500,
     temperature: 0 as const,
     system: advSystemBlocks,
     messages: [
@@ -434,7 +434,7 @@ Return JSON: { "observations": { "<structure>": { "echogenicity": string, "size_
   // ---- Etap 2C: Abnormality Detection ----
   const abnormalityResponse = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 3000,
+    max_tokens: 1500,
     temperature: 0,
     system: advSystemBlocks,
     messages: [{
@@ -463,7 +463,7 @@ JSON: {
   // ---- Etap 2D: Classification — formal classification systems (TI-RADS, BI-RADS, etc.) ----
   const classParams = {
     model: 'claude-opus-4-8' as const,
-    max_tokens: 2000,
+    max_tokens: 1500,
     temperature: 0 as const,
     system: advSystemBlocks,
     messages: [
@@ -496,7 +496,7 @@ Return JSON: { "classifications": [{ "system": string, "value": string, "label":
   // ---- Etap 2E: Report Generation ----
   const reportResponse = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 4000,
+    max_tokens: 1500,
     temperature: 0,
     system: advSystemBlocks,
     messages: [{
@@ -524,7 +524,7 @@ Pola: findings[], lowConfidenceFindings[], impression, imagingLimitations, aiSug
   // ---- Etap 3: AI Reviewer ----
   const reviewResponse = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 2000,
+    max_tokens: 1500,
     temperature: 0,
     messages: [{
       role: 'user',
@@ -568,7 +568,7 @@ Odpowiedz JSON:
   if (!approved && (reviewResult.corrections?.length ?? 0) > 0) {
     const correctionParams = {
       model: 'claude-opus-4-8' as const,
-      max_tokens: useThinking ? 10000 : 4000,
+      max_tokens: useThinking ? 10000 : 1500,
       ...(useThinking ? { thinking: { type: 'enabled' as const, budget_tokens: 8000 } } : { temperature: 0 as const }),
       system: advSystemBlocks,
       messages: [
@@ -667,7 +667,7 @@ async function generateRadiologyReport(params: {
 
   const response = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 4000,
+    max_tokens: 1500,
     temperature: 0,
     system: [cachedTextBlock(SYSTEM_LAYER1_GENERATE_REPORT_RADIOLOGIST), cachedTextBlock(examLayer2)],
     messages: [{ role: 'user', content: userMessage }],
@@ -702,7 +702,7 @@ async function generateMedicalReport(params: {
 
   const response = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 3000,
+    max_tokens: 1500,
     temperature: 0,
     system: [cachedTextBlock(SYSTEM_LAYER1_GENERATE_REPORT_DOCTOR)],
     messages: [{ role: 'user', content: userMessage }],
@@ -724,7 +724,7 @@ async function generateMedicalReport(params: {
   // Generate patient explanation in a second call
   const explanationResponse = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 2000,
+    max_tokens: 1500,
     temperature: 0,
     messages: [{
       role: 'user',
@@ -798,7 +798,7 @@ export async function fuseFindings(params: {
 }): Promise<FusionResult> {
   const response = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 3000,
+    max_tokens: 1500,
     temperature: 0,
     messages: [{
       role: 'user',
@@ -855,7 +855,7 @@ export async function generatePatientExplanation(params: {
 
   const response = await client.messages.create({
     model: 'claude-opus-4-8',
-    max_tokens: 2000,
+    max_tokens: 1500,
     temperature: 0,
     messages: [{
       role: 'user',
