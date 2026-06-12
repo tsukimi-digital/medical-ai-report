@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getIronSession } from 'iron-session'
 import { getSessionOptions, type SessionData } from './lib/auth'
-import { cookies } from 'next/headers'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -18,8 +17,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // For all protected (app) routes, check session
-  const session = await getIronSession<SessionData>(await cookies(), getSessionOptions())
+  // For all protected (app) routes, check session.
+  // Use the (request, response) overload so the cookie can be re-issued below.
+  const response = NextResponse.next()
+  const session = await getIronSession<SessionData>(request, response, getSessionOptions())
 
   if (!session.user) {
     // API routes return 401; page routes redirect to /login
@@ -29,7 +30,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  return NextResponse.next()
+  // Sliding expiration (spec l.1128 — invalidation after 15 min of INACTIVITY):
+  // re-save the session on every authenticated request so the cookie's
+  // 15-minute maxAge counts from the last activity, not from login.
+  await session.save()
+
+  return response
 }
 
 export const config = {
