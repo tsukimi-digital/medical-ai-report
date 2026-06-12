@@ -10,7 +10,7 @@ Cel: zbudować działające demo (POC) zgodne ze spec — Next.js 14 (App Router
 1. **Model wykonania:** pełny zespół multi-agent wg `CLAUDE.md` (TL + FE + BE1 + BE2 + QA, worktrees, PR-y, cross-review, merge wg zależności).
 2. **Style:** przepisać design-system z `styles/globals.css` na **Tailwind** (tokeny → `tailwind.config`), zachowując wierność wizualną prototypu.
 3. **Pipeline AI:** zaimplementować **oba** tryby (Two-Step **i** SIR+Multi-Step+Reviewer) sterowane `AI_PIPELINE_ADVANCED` — by później porównać, który działa lepiej.
-4. **Model AI:** `claude-opus-4-8` (wszędzie gdzie spec pisał `claude-sonnet-4-6`; logika thinking/temperature bez zmian — `temperature` tylko gdy thinking wyłączone).
+4. **Model AI:** `claude-opus-4-8` (wszędzie gdzie spec pisał `claude-sonnet-4-6`; logika thinking/temperature bez zmian — `temperature` tylko gdy thinking wyłączone). *(korekta 2026-06-12: Opus 4.8 nie przyjmuje `temperature` ani `enabled`+`budget_tokens` — używamy adaptive thinking `{type:'adaptive'}`, bez parametrów samplingu)*
 
 Pełny **Audyt UI (KROK 1)** został przedstawiony użytkownikowi w czacie; niniejszy plik to KROK 2 (plan).
 
@@ -61,7 +61,7 @@ Migracja prototypu → Next.js + Tailwind (prototyp = źródło prawdy):
 - `lib/ai/image-preprocessor.ts` — `sharp` resize 1568px, JPEG q85, strip EXIF.
 - `lib/ai/whisper.ts` — `whisper-1`, `language:'pl'`, `verbose_json`, priming prompt; preprocessing transkrypcji; próg ostrzeżenia <200 znaków.
 - `lib/ai/examTypePrompts.ts` — Warstwa 2 per typ badania (19 typów + fallback), klasyfikacje formalne (TI-RADS/BI-RADS/Bosniak/SFU/NASCET/O-RADS).
-- `lib/ai/claude.ts` — klient `claude-opus-4-8` z prompt caching (`cache_control: ephemeral` Warstwa 1+2), extended thinking (gdy `imageCount≥3` lub `suboptimal`; `temperature:0` tylko gdy thinking off; `max_tokens` 10000/1500). **Oba pipeline za `AI_PIPELINE_ADVANCED`:** `false`=Two-Step (Vision Extraction → Report Generation, „surowe obserwacje AI"); `true`=SIR → Multi-Step (A–E) → AI Reviewer (wypełnia `aiQualityCheck`). Wspólny output kontraktu — UI renderuje warunkowo (pola `optional`).
+- `lib/ai/claude.ts` — klient `claude-opus-4-8` z prompt caching (`cache_control: ephemeral` Warstwa 1+2), adaptive thinking `{type:'adaptive'}` (gdy `imageCount≥3` lub `suboptimal`; Opus 4.8 — bez `temperature` i bez `budget_tokens`; `max_tokens` 10000/4000). **Oba pipeline za `AI_PIPELINE_ADVANCED`:** `false`=Two-Step (Vision Extraction → Report Generation, „surowe obserwacje AI"); `true`=SIR → Multi-Step (A–E) → AI Reviewer (wypełnia `aiQualityCheck`). Wspólny output kontraktu — UI renderuje warunkowo (pola `optional`).
 - `app/api/ai/{analyze-image (multipart),transcribe,generate-report,fuse-findings,generate-patient-explanation}` — każdy `export const maxDuration = 60`. Obsługa błędów: timeout 45s, 1 auto-retry, fallback do ręcznego edytora po 2 porażkach.
 
 ### Faza 3 — Integracja (FE + BE2 cross-review)
@@ -120,7 +120,7 @@ Zależności: M0 blokuje M1; integracja (Faza 3) wymaga przynajmniej BE2 + FE; Q
 ---
 
 ## Ryzyka / uwagi
-- `AI_PIPELINE_ADVANCED=true` + Opus 4.8 → bliżej górnej granicy `maxDuration=60` (wymaga Vercel Pro). Monitorować czasy; ewentualnie ograniczyć `budget_tokens`.
+- `AI_PIPELINE_ADVANCED=true` + Opus 4.8 → bliżej górnej granicy `maxDuration=60` (wymaga Vercel Pro). Monitorować czasy; ewentualnie obniżyć `max_tokens` (`budget_tokens` nie istnieje na Opus 4.8 — adaptive thinking).
 - Multipart upload kontra limit body 4.5MB Vercel — trzymać się `multipart/form-data` (bez base64 w JSON).
 - In-memory store gubi dane użytkownika po ~15 min bezczynności na Vercel; seed zawsze przywracany — akceptowalne dla demo (Postgres/Neon = `docs/TODO.md`, poza zakresem POC).
 - Tylko dane syntetyczne; brak DPA/anonimizacji pikselowej — produkcyjne carve-outy w `docs/TODO.md`, świadomie poza POC.

@@ -186,8 +186,9 @@
 ## Faza 10 — Zgodność ze spec: max_tokens + session timeout (BE2: Akira, FE: Yuki) — fix/spec-compliance
 
 ### BE2 (Akira Yamamoto)
-- [x] **max_tokens wg spec (l.504+511)** — `lib/ai/claude.ts`: wszystkie 16 wywołań Claude na formułę `useThinking ? 10000 : 1500` (wcześniej 2000–4000); wywołania bez thinking → 1500
+- [x] **max_tokens — reguła kanoniczna `thinking ? 10000 : 4000`** — `lib/ai/claude.ts`: wszystkie wywołania Claude na formułę `useThinking ? 10000 : 4000`; wywołania bez thinking → 4000 (decyzja użytkownika 2026-06-12: 4000 dla demo — bez ryzyka obcięcia odpowiedzi; zastępuje wcześniejsze 1500 ze spec)
 - [x] **Opus 4.8 API compat** — thinking enabled+budget_tokens → adaptive; usunięte temperature (sampling params zwracają 400 na Opus 4.8) — lib/ai/claude.ts
+- [x] **Synchronizacja dokumentów do reguły 10000/4000** — spec (`docs/superpowers/specs/2026-06-03-medical-ai-poc-design.md` l.501–516, l.523: max_tokens 4000, adaptive thinking, bez temperature, model claude-opus-4-8) + `docs/IMPLEMENTATION-PLAN.md` (decyzja 4 — korekta, Faza 2 — max_tokens 10000/4000, Ryzyka — budget_tokens→max_tokens); koniec rozjazdu spec↔kod
 
 ### FE (Yuki Sato) + BE1 (Kenji Mori)
 - [x] **Toast ostrzegawczy po 10 min nieaktywności** — `lib/use-inactivity-timeout.ts` + `app/(app)/layout.tsx`: „Sesja wygaśnie za 5 minut — zapisz raport." (i18n PL/EN), zamykany, chowany przez aktywność; reset timerów na pointerdown/keydown (throttle 1s); testy jednostkowe hooka (vitest fake timers)
