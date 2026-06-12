@@ -8,6 +8,7 @@ import { Btn } from '@/components/ui/button'
 import { Toast } from '@/components/ui/toast'
 import { useI18n } from '@/lib/i18n/index'
 import { apiClient } from '@/lib/api-client'
+import { useInactivityTimeout } from '@/lib/use-inactivity-timeout'
 import type { User } from '@/lib/types'
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -15,6 +16,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { lang, setLang, t } = useI18n()
   const [user, setUser] = useState<User | null>(null)
   const [showLangToast, setShowLangToast] = useState(false)
+  const [showSessionToast, setShowSessionToast] = useState(false)
   const prevLangRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -50,6 +52,35 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     await apiClient.logout()
     router.push('/login')
   }
+
+  // -------------------------------------------------------------------------
+  // Session inactivity (spec l.1128): warn after 10 min, auto-logout after 15.
+  // Activity (pointerdown/keydown) resets the timers and hides the warning;
+  // a throttled /api/auth/me ping slides the server-side cookie so the 15-min
+  // window counts from last activity, not from login.
+  // -------------------------------------------------------------------------
+  const handleSessionWarn = useCallback(() => setShowSessionToast(true), [])
+  const handleSessionActivity = useCallback(() => setShowSessionToast(false), [])
+  const handleSessionRefresh = useCallback(() => {
+    // Lightweight authenticated request — middleware re-issues the cookie.
+    // If the session is already gone server-side, send the user to /login.
+    apiClient.me().catch(() => router.replace('/login'))
+  }, [router])
+  const handleSessionTimeout = useCallback(async () => {
+    try {
+      await apiClient.logout()
+    } catch {
+      // Session may already be invalidated server-side — redirect regardless.
+    }
+    router.push('/login')
+  }, [router])
+
+  useInactivityTimeout({
+    onWarn: handleSessionWarn,
+    onTimeout: handleSessionTimeout,
+    onActivity: handleSessionActivity,
+    onRefreshSession: handleSessionRefresh,
+  })
 
   return (
     <div className="app-shell">
@@ -131,6 +162,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
       {/* Page content */}
       <main>{children}</main>
+
+      {/* Session expiry warning toast — persistent until activity or dismissal */}
+      {showSessionToast && (
+        <Toast
+          message={t('sessionExpireWarning')}
+          onDismiss={() => setShowSessionToast(false)}
+          duration={null}
+          dismissible
+          dismissLabel={t('sessionToastDismiss')}
+        />
+      )}
 
       {/* Lang change toast */}
       {showLangToast && (

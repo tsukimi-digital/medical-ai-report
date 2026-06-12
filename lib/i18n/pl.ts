@@ -219,6 +219,10 @@ export const pl = {
   patientReports: 'Badania pacjenta',
   backToPatients: 'Pacjenci',
 
+  // session timeout
+  sessionExpireWarning: 'Sesja wygaśnie za 5 minut — zapisz raport.',
+  sessionToastDismiss: 'Zamknij',
+
   // a11y labels
   ariaHome: 'Sonara — strona główna',
   ariaMainNav: 'Nawigacja główna',
