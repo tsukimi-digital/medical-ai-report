@@ -162,9 +162,12 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
     if (!report) return
     setApproving(true)
     try {
-      // Merge editedExplanation into report before approving
+      // Flush any draft edits before approving
       if (editedExplanation && editedExplanation !== report.patientExplanation) {
         await apiClient.updateMedReport(report.id, { patientExplanation: editedExplanation })
+      }
+      if (report.uncertainItems) {
+        await apiClient.updateMedReport(report.id, { uncertainItems: report.uncertainItems })
       }
       const { report: updated } = await apiClient.approveMedReport(report.id)
       setReport(updated)
@@ -426,8 +429,19 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                         {lang === 'pl' ? 'Wymaga weryfikacji' : 'Needs verification'}
                       </div>
                       {report.uncertainItems.map((item, i) => (
-                        <div key={i} className="row g6" style={{ fontSize: 12, color: 'var(--warn-text)' }}>
-                          <span>⚠</span><span>[WYMAGA WERYFIKACJI] {item}</span>
+                        <div key={i} className="row g6" style={{ fontSize: 12, color: 'var(--warn-text)', alignItems: 'flex-start' }}>
+                          <span style={{ flex: 'none', marginTop: 1 }}>⚠</span>
+                          <span style={{ flex: 1 }}>[WYMAGA WERYFIKACJI] {item}</span>
+                          <button
+                            type="button"
+                            className="iconbtn"
+                            style={{ width: 26, height: 26, flex: 'none' }}
+                            title={t('removeItem')}
+                            aria-label={t('removeItem')}
+                            onClick={() => setReport({ ...report, uncertainItems: report.uncertainItems!.filter((_, j) => j !== i) })}
+                          >
+                            <Icon name="x" size={13} aria-hidden />
+                          </button>
                         </div>
                       ))}
                     </div>

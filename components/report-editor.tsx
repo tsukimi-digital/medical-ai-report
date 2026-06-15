@@ -36,6 +36,11 @@ export function ReportEditor({ report, onChange, readonly, lang = 'pl', onEviden
     onChange({ ...report, findings: report.findings.filter((f) => f.id !== id) })
   }
 
+  const handleLowConfidenceRemove = (id: string) => {
+    if (!isRadReport(report)) return
+    onChange({ ...report, lowConfidenceFindings: report.lowConfidenceFindings!.filter((f) => f.id !== id) })
+  }
+
   if (isRadReport(report)) {
     return (
       <div className="col g20">
@@ -77,6 +82,7 @@ export function ReportEditor({ report, onChange, readonly, lang = 'pl', onEviden
               lang={lang}
               readonly={readonly}
               label="low"
+              onRemove={readonly ? undefined : handleLowConfidenceRemove}
               onEvidence={onEvidence}
             />
           </div>
