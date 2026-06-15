@@ -426,8 +426,17 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                         {lang === 'pl' ? 'Wymaga weryfikacji' : 'Needs verification'}
                       </div>
                       {report.uncertainItems.map((item, i) => (
-                        <div key={i} className="row g6" style={{ fontSize: 12, color: 'var(--warn-text)' }}>
-                          <span>⚠</span><span>[WYMAGA WERYFIKACJI] {item}</span>
+                        <div key={i} className="row g6" style={{ fontSize: 12, color: 'var(--warn-text)', alignItems: 'flex-start' }}>
+                          <span style={{ flex: 'none', marginTop: 1 }}>⚠</span>
+                          <span style={{ flex: 1 }}>[WYMAGA WERYFIKACJI] {item}</span>
+                          <button
+                            type="button"
+                            aria-label={lang === 'pl' ? 'Usuń' : 'Dismiss'}
+                            onClick={() => setReport({ ...report, uncertainItems: report.uncertainItems!.filter((_, j) => j !== i) })}
+                            style={{ flex: 'none', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--warn-text)', opacity: 0.6, padding: '0 2px', lineHeight: 1, fontSize: 14 }}
+                          >
+                            ✕
+                          </button>
                         </div>
                       ))}
                     </div>
