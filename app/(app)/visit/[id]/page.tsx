@@ -162,9 +162,12 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
     if (!report) return
     setApproving(true)
     try {
-      // Merge editedExplanation into report before approving
+      // Flush any draft edits before approving
       if (editedExplanation && editedExplanation !== report.patientExplanation) {
         await apiClient.updateMedReport(report.id, { patientExplanation: editedExplanation })
+      }
+      if (report.uncertainItems) {
+        await apiClient.updateMedReport(report.id, { uncertainItems: report.uncertainItems })
       }
       const { report: updated } = await apiClient.approveMedReport(report.id)
       setReport(updated)
@@ -431,11 +434,13 @@ export default function VisitDetailPage({ params }: { params: { id: string } }) 
                           <span style={{ flex: 1 }}>[WYMAGA WERYFIKACJI] {item}</span>
                           <button
                             type="button"
-                            aria-label={lang === 'pl' ? 'Usuń' : 'Dismiss'}
+                            className="iconbtn"
+                            style={{ width: 26, height: 26, flex: 'none' }}
+                            title={t('removeItem')}
+                            aria-label={t('removeItem')}
                             onClick={() => setReport({ ...report, uncertainItems: report.uncertainItems!.filter((_, j) => j !== i) })}
-                            style={{ flex: 'none', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--warn-text)', opacity: 0.6, padding: '0 2px', lineHeight: 1, fontSize: 14 }}
                           >
-                            ✕
+                            <Icon name="x" size={13} aria-hidden />
                           </button>
                         </div>
                       ))}
